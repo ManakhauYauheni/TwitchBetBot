@@ -15,11 +15,12 @@ bash
 3. Распакуйте в любую папку
 4. Запустите TwitchBetBot.exe
 </details><details> <summary><b>Вариант 2: Сборка из исходников</b></summary>
+   <pre>
 bash
 git clone https://github.com/ManakhauYauheni/TwitchBetBot.git
 cd TwitchBetBot
 dotnet build -c Release
-dotnet publish -c Release -r win-x64 --self-contained true -o ./publish
+dotnet publish -c Release -r win-x64 --self-contained true -o ./publish </pre>
 </details>
 <h2><b>Настройка Twitch</b></h2>
 <h3>Регистрация приложения</h3>
