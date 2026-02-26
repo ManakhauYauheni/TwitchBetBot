@@ -1,6 +1,6 @@
 <h1><b>Twitch Bet Bot для Dota 2</b></h1>
 <p align="center"> <a href="https://dotnet.microsoft.com/ru-ru/download/dotnet/10.0"> <img src="https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square" alt=".NET 10.0"/></a> <a href="https://learn.microsoft.com/ru-ru/dotnet/desktop/wpf/"><img src="https://img.shields.io/badge/WPF-Windows-green?style=flat-square&logo=windows&logoColor=white" alt="WPF"/></a> <a href="https://store.steampowered.com/app/570/Dota_2/"> <img src="https://img.shields.io/badge/Game-Dota_2-red?style=flat-square" alt="Dota 2"/></a> <a href="https://github.com/ManakhauYauheni/TwitchBetBot/releases"> <img src="https://img.shields.io/badge/version-1.0.0-blue?style=flat-square" alt="Version 1.0.0"/></a>  <a href="https://www.nuget.org/packages/Dota2GSI"><img src="https://img.shields.io/badge/NuGet-v2.1.1.8897-yellow?style=flat-square&logo=windows&logoColor=white" alt="nuget"/>
-</p><p align="center"> <h2><b>Автоматическое создание и завершение ставок на Twitch по играм Dota 2</b></h2> </p>
+</p><p align="center"> <h2><b>Автоматическое создание и завершение ставок на Twitch по играм Dota2</b></h2> </p>
 
 О проекте
 Twitch Bet Bot — это десктопное приложение для Windows, написанное на C# с использованием WPF. Оно автоматически создаёт и завершает предсказания (ставки) на вашем канале Twitch, анализируя события игры Dota 2 в реальном времени через Game State Integration (GSI).
