@@ -9,14 +9,12 @@ Twitch Bet Bot — это десктопное приложение для Windo
 
 <h2><b>Установка</b></h2>
 <details> <summary><b>Вариант 1: Готовая сборка</b></summary>
-bash
-1. Перейдите на страницу релизов
-2. Скачайте publish.rar
-3. Распакуйте в любую папку
-4. Запустите TwitchBetBot.exe
+1. <a href="https://github.com/ManakhauYauheni/TwitchBetBot/releases" >Перейдите на страницу релизов</a><br>
+2. Скачайте publish.rar<br>
+3. Распакуйте в любую папку<br>
+4. Запустите TwitchBetBot.exe<br>
 </details><details> <summary><b>Вариант 2: Сборка из исходников</b></summary>
    <pre>
-bash
 git clone https://github.com/ManakhauYauheni/TwitchBetBot.git
 cd TwitchBetBot
 dotnet build -c Release
