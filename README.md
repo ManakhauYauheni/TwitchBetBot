@@ -35,7 +35,10 @@ dotnet publish -c Release -r win-x64 --self-contained true -o ./publish
 4. Скопируйте полученный Client ID<br>
 <h3><b>Получение токена</b></h3>
 
-1.Для получения токена вставьте следующую ссылку в строку браузера: https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=token&scope=channel:read:predictions+channel:manage:predictions
+1.Для получения токена вставьте следующую ссылку в строку браузера: <br>
+<pre >
+https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http://localhost:3000&response_type=token&scope=channel:read:predictions+channel:manage:predictions
+</pre><br>
 
 2.Замените YOUR_CLIENT_ID на свой Client ID, полученный при регистрации
 
@@ -92,4 +95,4 @@ dotnet publish -c Release -r win-x64 --self-contained true -o ./publish
 <div align="center"> <p>Отдельная благодарность <b>antonpup</b> за библиотеку</p> <p> <a href="https://github.com/antonpup/Dota2GSI"> <img src="https://img.shields.io/badge/GitHub-Dota2GSI-181717?style=for-the-badge&logo=github" alt="Dota2GSI"/> </a> </p> <p>Без этой библиотеки проект был бы невозможен</p> </div>
 <h2><b>Контакты</b></h2>
 <div align="center"> <table> <tr> <td align="center"> <b>GitHub</b><br/> <a href="https://github.com/ManakhauYauheni">github.com/ManakhauYauheni</a> </td>  <td align="center"> <b>Email</b><br/> <a href="mailto:your.email@example.com">manakhov.00@mail.ru</a> </td> </tr> </table> </div>
-<p align="center"> <sub>© 2026 Twitch Bet Bot</sub> </p>
+<p align="center"> <sub>© 2026 TwitchBetBot</sub> </p>
