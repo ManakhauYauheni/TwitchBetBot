@@ -1,0 +1,19 @@
+{
+  "AccessToken": "sy1x5h2hq2fo9n4ai6v1g8s378ikoa",
+  "ClientId": "a633udyf447yrm4pckr51v65rnlqkj",
+  "ChannelName": "zzlya322",
+  "BroadcasterId": "1419966044",
+  "Dota2Teams": [
+    "Radiant",
+    "Dire"
+  ],
+  "GSIPort": 3000,
+  "PredictionWindowSeconds": 300,
+  "AutoLockMinutes": 5,
+  "CheckIntervalSeconds": 30,
+  "AutoStartMonitoring": true,
+  "AutoCreatePredictions": true,
+  "AutoEndPredictions": true,
+  "AutoLockPredictions": false,
+  "ConfigPath": "config.json"
+}

@@ -39,7 +39,7 @@ namespace TwitchBetBot.Models
         // Названия команд (Radiant и Dire)
         public string[] Dota2Teams { get; set; } = { "Radiant", "Dire" };
         // Порт для связи с Dota 2 (должен совпадать с конфигом игры)
-        public int GSIPort { get; set; } = 3000;
+        public int GSIPort { get; set; } = 2999;
 
         // ========== Настройки ставок ==========
 

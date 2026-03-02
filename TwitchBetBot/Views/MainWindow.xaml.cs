@@ -74,8 +74,6 @@ namespace TwitchBetBot.Views
                 AccessTokenPasswordBox.Password = AccessTokenTextBox.Text;
             }
         }
-
-
-
+        
     }
 }
