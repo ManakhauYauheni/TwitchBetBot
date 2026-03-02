@@ -78,6 +78,8 @@ namespace TwitchBetBot.ViewModels
         public string ClientId { get; set; } = "";
         public string ChannelName { get; set; } = "";
 
+        public string BroadcasterId { get; set; } = "";
+
         // ========== Команды для кнопок ==========
 
         public ICommand ConnectCommand { get; }               // Подключиться к Twitch
@@ -139,6 +141,7 @@ namespace TwitchBetBot.ViewModels
 
             // Таймер для очистки логов (каждые 5 минут)
             _logCleanupTimer = new System.Timers.Timer(300000); // 300000 мс = 5 минут
+            _logCleanupTimer = new System.Timers.Timer(300000); // 300000 мс = 5 минут
             _logCleanupTimer.Elapsed += (s, e) =>
             {
                 Application.Current.Dispatcher.InvokeAsync(() =>
@@ -181,6 +184,7 @@ namespace TwitchBetBot.ViewModels
             AccessToken = _config.AccessToken;
             ClientId = _config.ClientId;
             ChannelName = _config.ChannelName;
+            _config.BroadcasterId = BroadcasterId;
         }
 
         private void SaveConfigToModel()
@@ -188,6 +192,7 @@ namespace TwitchBetBot.ViewModels
             _config.AccessToken = AccessToken;
             _config.ClientId = ClientId;
             _config.ChannelName = ChannelName;
+            _config.BroadcasterId = BroadcasterId;
         }
 
         // Сохранение настроек
@@ -247,6 +252,12 @@ namespace TwitchBetBot.ViewModels
             {
                 Log("🔐 Проверка подключения к Twitch...");
 
+                // Получаем ID канала
+                _config.BroadcasterId = await _authService.GetBroadcasterId(
+                    _config.AccessToken, _config.ClientId, _config.ChannelName);
+                BroadcasterId = _config.BroadcasterId;
+
+
                 // Проверяем что все поля заполнены
                 if (string.IsNullOrEmpty(AccessToken))
                 {
@@ -282,9 +293,7 @@ namespace TwitchBetBot.ViewModels
 
                 Log($"✅ Токен валиден: {validation.Login}");
 
-                // Получаем ID канала
-                _config.BroadcasterId = await _authService.GetBroadcasterId(
-                    _config.AccessToken, _config.ClientId, _config.ChannelName);
+             
 
                 if (string.IsNullOrEmpty(_config.BroadcasterId))
                 {
@@ -313,6 +322,7 @@ namespace TwitchBetBot.ViewModels
                 Log($"❌ Ошибка подключения: {ex.Message}");
                 return false;
             }
+         
         }
 
         // ========== Мониторинг ==========
@@ -944,6 +954,9 @@ namespace TwitchBetBot.ViewModels
                 {
                     Log("✅ Ставка отменена");
                     CurrentPrediction = null;
+                    _gameService.ResetForNewGame();
+
+
                 }
                 else
                 {

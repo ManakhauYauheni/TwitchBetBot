@@ -158,7 +158,6 @@ namespace TwitchBetBot.Services
         {
             try
             {
-                // Если нет данных о карте - значит что-то пошло не так
                 if (gs?.Map == null)
                 {
                     HandleUndefinedState();
@@ -166,9 +165,22 @@ namespace TwitchBetBot.Services
                 }
 
                 var map = gs.Map;
-                var gameState = map.GameState.ToString(); // Текущее состояние игры
+                var gameState = map.GameState.ToString();
 
-                LogToUI($"Состояние: {gameState}", false);
+
+
+                // 🔍 ПРОВЕРКА НА РЕПЛЕЙ - ВОТ ЗДЕСЬ!
+                if (IsReplayMatch(gs))
+                {
+                    LogToUI("🚫 Реплей - игнорируем создание ставки");
+
+                    // Сбрасываем флаги, чтобы не создавать ставку
+                    _isInGame = false;
+                    _predictionCreated = false;
+                    _teamShowcaseDetected = false;
+                    return; // ← ВАЖНО: выходим, не обрабатывая дальше
+                }
+
 
                 // === Проверяем, не восстановилось ли соединение после проблем ===
                 if (_undefinedStartTime.HasValue && gameState != "Undefined")
@@ -374,6 +386,20 @@ namespace TwitchBetBot.Services
             }
         }
 
+
+
+       public void ResetForNewGame()
+        {
+            _isInGame = false;
+            _predictionCreated = false;
+            _teamShowcaseDetected = false;
+            _undefinedStartTime = null;
+            _disconnectDetected = false;
+            LogToUI("🔄 Сброс состояния для новой игры", false);
+        }
+
+
+
         // ========== Обработка победы ==========
 
         // Событие победы команды (приходит от Dota 2 GSI)
@@ -482,6 +508,38 @@ namespace TwitchBetBot.Services
                 LogToUI($"❌ Ошибка EndGame: {ex.Message}");
             }
         }
+
+
+        private bool IsReplayMatch(GameState gs)
+        {
+            try
+            {
+                if (gs?.Player?.Teams == null) return false;
+
+                int totalPlayers = 0;
+                foreach (var team in gs.Player.Teams)
+                {
+                    totalPlayers += team.Value.Count;
+                }
+
+                // Если мы видим больше 5 игроков в сумме, значит мы в режиме наблюдателя
+                if (totalPlayers > 5)
+                {
+                    LogToUI($"🚫 Обнаружен режим наблюдателя (игроков: {totalPlayers}) - реплей/просмотр");
+                    return true;
+                }
+
+                return false;
+            }
+            catch (Exception ex)
+            {
+                LogToUI($"⚠️ Ошибка проверки реплея: {ex.Message}");
+                return false;
+            }
+        }
+
+
+
 
         // ========== INotifyPropertyChanged ==========
 
