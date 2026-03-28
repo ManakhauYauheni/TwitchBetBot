@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Dota2GSI;
+using System;
 using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
@@ -10,24 +11,30 @@ using TwitchBetBot.Utils;
 
 namespace TwitchBetBot.ViewModels
 {
-    // Главная ViewModel - связывает интерфейс с логикой
-    // Содержит все данные, которые отображаются в окне, и команды для кнопок
+    public enum AppMode
+    {
+        Tracker,    // Только трекер MMR (без Twitch)
+        Full        // Полный режим (Twitch + ставки + чат)
+    }
+
     public class MainViewModel : ViewModelBase
     {
         // ========== Приватные поля ==========
 
-        private readonly AppConfig _config;                    // Настройки
-        private readonly TwitchAuthService _authService;        // Для авторизации
-        private readonly PredictionService _predictionService;  // Для ставок
-        private readonly Dota2GameService _gameService;         // Для Dota 2
-        private System.Timers.Timer _monitoringTimer;           // Таймер проверки статуса
-        private System.Timers.Timer _logCleanupTimer;           // Таймер для очистки логов
+        private readonly AppConfig _config;
+        private readonly TwitchAuthService _authService;
+        private readonly PredictionService _predictionService;
+        private readonly Dota2GameService _gameService;
+        private System.Timers.Timer _monitoringTimer;
+        private System.Timers.Timer _logCleanupTimer;
 
-        // Для автоочистки логов
-        private const int MAX_LOG_LINES = 1000;                  // Сколько строк максимум храним
+        private TwitchChatService _chatService;
+        private SessionStats _sessionStats;
+        private OpenDotaService _openDotaService;
+
+        private const int MAX_LOG_LINES = 1000;
         private System.Collections.Generic.List<string> _logLines = new System.Collections.Generic.List<string>();
 
-        // Свойства, которые отображаются в интерфейсе
         private string _logText = "";
         private bool _isConnected = false;
         private bool _isMonitoring = false;
@@ -35,11 +42,15 @@ namespace TwitchBetBot.ViewModels
         private Prediction _currentPrediction;
         private Dota2Match _currentMatch;
 
-        // ========== Свойства для привязки в XAML ==========
+
+        private AppMode _currentMode = AppMode.Tracker;
+
+        // ========== Свойства ==========
 
         public string LogText
         {
             get => _logText;
+
             set => SetProperty(ref _logText, value);
         }
 
@@ -73,48 +84,61 @@ namespace TwitchBetBot.ViewModels
             set => SetProperty(ref _currentMatch, value);
         }
 
-        // Данные из полей ввода
         public string AccessToken { get; set; } = "";
         public string ClientId { get; set; } = "";
         public string ChannelName { get; set; } = "";
-
         public string BroadcasterId { get; set; } = "";
+        public string BotUsername { get; set; } = "";
+        public string BotAccessToken { get; set; } = "";
+        public bool IsChatBotRunning { get; set; } = false;
 
-        // ========== Команды для кнопок ==========
+        // ========== Команды ==========
 
-        public ICommand ConnectCommand { get; }               // Подключиться к Twitch
-        public ICommand ToggleMonitoringCommand { get; }       // Вкл/выкл мониторинг
-        public ICommand StartGSICommand { get; }               // Запустить GSI
-        public ICommand StopGSICommand { get; }                // Остановить GSI
-        public ICommand CreatePredictionCommand { get; }       // Создать ставку вручную
-        public ICommand LockPredictionCommand { get; }         // Закрыть прием ставок
-        public ICommand EndPredictionRadiantCommand { get; }   // Завершить победой Radiant
-        public ICommand EndPredictionDireCommand { get; }      // Завершить победой Dire
-        public ICommand CancelPredictionCommand { get; }       // Отменить ставку
-        public ICommand SaveConfigCommand { get; }             // Сохранить настройки
-        public ICommand TestPredictionCommand { get; }         // Тестовая ставка
-        public ICommand TestEncryptionCommand { get; }         // Проверить шифрование
-                                                               // ========== Конструктор ==========
+        public ICommand ConnectCommand { get; }
+        public ICommand ToggleMonitoringCommand { get; }
+        public ICommand StartGSICommand { get; }
+        public ICommand StopGSICommand { get; }
+        public ICommand CreatePredictionCommand { get; }
+        public ICommand LockPredictionCommand { get; }
+        public ICommand EndPredictionRadiantCommand { get; }
+        public ICommand EndPredictionDireCommand { get; }
+        public ICommand CancelPredictionCommand { get; }
+        public ICommand SaveConfigCommand { get; }
+        public ICommand TestPredictionCommand { get; }
+        public ICommand TestEncryptionCommand { get; }
+        public ICommand StartChatBotCommand { get; }
+        public ICommand StopChatBotCommand { get; }
+
+        // ========== Конструктор ==========
 
         public MainViewModel()
         {
-            // Загружаем настройки из файла
             _config = AppConfig.Load();
             LoadConfigFromModel();
 
-            // Создаем сервисы
             _authService = new TwitchAuthService();
             _predictionService = new PredictionService(_config);
-            _gameService = new Dota2GameService(_config, this);
 
-            // Подписываемся на события от сервисов
+            // ========== OpenDota и GameService ==========
+            _openDotaService = new OpenDotaService((msg) => Log(msg));
+            _gameService = new Dota2GameService(_config, this, _openDotaService);
+            // ============================================
+
+            _sessionStats = new SessionStats();
+            _gameService.SessionStats = _sessionStats;
+
+            if (_config.CurrentMmr > 0)
+            {
+                _sessionStats.SetMmr(_config.CurrentMmr);
+                Log($"📊 MMR загружен из конфига: {_config.CurrentMmr}");
+            }
+
             _predictionService.OnPredictionCreated += OnPredictionCreated;
             _predictionService.OnPredictionUpdated += OnPredictionUpdated;
             _predictionService.OnPredictionEnded += OnPredictionEnded;
             _gameService.OnGameStarted += OnGSIGameStarted;
             _gameService.OnGameEnded += OnGSIGameEnded;
 
-            // Создаем команды для кнопок
             ConnectCommand = new RelayCommand(() => _ = ConnectToTwitchAsync());
             ToggleMonitoringCommand = new RelayCommand(ToggleMonitoring);
             StartGSICommand = new RelayCommand(StartGSI);
@@ -127,8 +151,9 @@ namespace TwitchBetBot.ViewModels
             SaveConfigCommand = new RelayCommand(SaveConfig);
             TestPredictionCommand = new RelayCommand(() => _ = TestPredictionAsync());
             TestEncryptionCommand = new RelayCommand(TestEncryption_Click);
+            StartChatBotCommand = new RelayCommand(StartChatBot);
+            StopChatBotCommand = new RelayCommand(StopChatBot);
 
-            // Таймер для проверки статуса ставок (каждые N секунд)
             _monitoringTimer = new System.Timers.Timer(_config.CheckIntervalSeconds * 1000);
             _monitoringTimer.Elapsed += async (s, e) =>
             {
@@ -139,9 +164,7 @@ namespace TwitchBetBot.ViewModels
             };
             _monitoringTimer.AutoReset = true;
 
-            // Таймер для очистки логов (каждые 5 минут)
-            _logCleanupTimer = new System.Timers.Timer(300000); // 300000 мс = 5 минут
-            _logCleanupTimer = new System.Timers.Timer(300000); // 300000 мс = 5 минут
+            _logCleanupTimer = new System.Timers.Timer(300000);
             _logCleanupTimer.Elapsed += (s, e) =>
             {
                 Application.Current.Dispatcher.InvokeAsync(() =>
@@ -152,29 +175,12 @@ namespace TwitchBetBot.ViewModels
             _logCleanupTimer.AutoReset = true;
             _logCleanupTimer.Start();
 
-            // Приветственное сообщение
             Log("🚀 Twitch Bet Bot для Dota 2 запущен");
-            Log("1. Введите данные авторизации Twitch");
-            Log("2. Нажмите 'Подключиться'");
-            Log("3. Нажмите 'Запустить мониторинг'");
-            Log("4. Запустите Dota 2 и начните игру");
+            Log("🎯 Режим: Трекер (только MMR)");
+            Log("💡 Для переключения в полный режим используйте переключатель вверху");
             Log("🔄 Логи будут автоматически очищаться каждые 5 минут");
 
-            // Если включен автостарт - пробуем подключиться через 3 секунды
-            if (_config.AutoStartMonitoring)
-            {
-                Task.Delay(3000).ContinueWith(async _ =>
-                {
-                    await Application.Current.Dispatcher.InvokeAsync(async () =>
-                    {
-                        var connected = await ConnectToTwitchAsync();
-                        if (connected)
-                        {
-                            StartMonitoring();
-                        }
-                    });
-                });
-            }
+            StartGSI();
         }
 
         // ========== Работа с конфигом ==========
@@ -184,7 +190,9 @@ namespace TwitchBetBot.ViewModels
             AccessToken = _config.AccessToken;
             ClientId = _config.ClientId;
             ChannelName = _config.ChannelName;
-            _config.BroadcasterId = BroadcasterId;
+            BroadcasterId = _config.BroadcasterId;
+            BotUsername = _config.BotUsername;
+            BotAccessToken = _config.BotAccessToken;
         }
 
         private void SaveConfigToModel()
@@ -193,9 +201,11 @@ namespace TwitchBetBot.ViewModels
             _config.ClientId = ClientId;
             _config.ChannelName = ChannelName;
             _config.BroadcasterId = BroadcasterId;
+            _config.BotUsername = BotUsername;
+            _config.BotAccessToken = BotAccessToken;
+            _config.CurrentMmr = _sessionStats.CurrentMmr;
         }
 
-        // Сохранение настроек
         private void SaveConfig()
         {
             SaveConfigToModel();
@@ -203,32 +213,25 @@ namespace TwitchBetBot.ViewModels
             Log($"   AccessToken: {(string.IsNullOrEmpty(AccessToken) ? "❌ ПУСТ" : "✅ ЗАШИФРОВАН")}");
             Log($"   ClientId: {(string.IsNullOrEmpty(ClientId) ? "❌ ПУСТ" : "✅ " + ClientId)}");
             Log($"   ChannelName: {(string.IsNullOrEmpty(ChannelName) ? "❌ ПУСТ" : "✅ " + ChannelName)}");
+            Log($"   BotUsername: {(string.IsNullOrEmpty(BotUsername) ? "❌ ПУСТ" : "✅ " + BotUsername)}");
+            Log($"   CurrentMmr: {_sessionStats.CurrentMmr}");
 
             _config.Save();
 
             if (File.Exists(_config.ConfigPath))
             {
                 var fileInfo = new FileInfo(_config.ConfigPath);
-                Log($"📄 Файл config.json создан (размер: {fileInfo.Length} байт)");
-
-                if (System.Diagnostics.Debugger.IsAttached)
-                {
-                    var content = File.ReadAllText(_config.ConfigPath);
-                    Log($"🔍 Первые 50 символов: {content.Substring(0, Math.Min(50, content.Length))}...");
-                }
+                Log($"📄 Файл config.json обновлён (размер: {fileInfo.Length} байт)");
             }
 
             Log("💾 Конфиг сохранен (токен зашифрован)");
         }
 
-        // Очистка старой ставки из кэша
         private void ClearOldPrediction()
         {
             CurrentPrediction = null;
-
             try
             {
-                // Рефлексией лезем в приватное поле _currentPrediction в PredictionService
                 var serviceType = _predictionService.GetType();
                 var field = serviceType.GetField("_currentPrediction",
                     System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
@@ -244,6 +247,35 @@ namespace TwitchBetBot.ViewModels
                 Log($"⚠️ Не удалось очистить состояние: {ex.Message}");
             }
         }
+
+        // ========== Переключение режимов ==========
+
+        public void SwitchToFullMode()
+        {
+            if (_currentMode == AppMode.Full) return;
+
+            _currentMode = AppMode.Full;
+            Log("🌊 Переключено в полный режим (с Twitch)");
+
+            if (!IsConnected && !string.IsNullOrEmpty(AccessToken) && !string.IsNullOrEmpty(ClientId) && !string.IsNullOrEmpty(ChannelName))
+            {
+                _ = ConnectToTwitchAsync();
+            }
+        }
+
+        public void SwitchToTrackerMode()
+        {
+            if (_currentMode == AppMode.Tracker) return;
+
+            _currentMode = AppMode.Tracker;
+            Log("🎯 Переключено в режим трекера (только MMR)");
+
+            if (IsChatBotRunning)
+            {
+                StopChatBot();
+            }
+        }
+
         // ========== Подключение к Twitch ==========
 
         private async Task<bool> ConnectToTwitchAsync()
@@ -252,13 +284,6 @@ namespace TwitchBetBot.ViewModels
             {
                 Log("🔐 Проверка подключения к Twitch...");
 
-                // Получаем ID канала
-                _config.BroadcasterId = await _authService.GetBroadcasterId(
-                    _config.AccessToken, _config.ClientId, _config.ChannelName);
-                BroadcasterId = _config.BroadcasterId;
-
-
-                // Проверяем что все поля заполнены
                 if (string.IsNullOrEmpty(AccessToken))
                 {
                     Log("❌ Access Token не заполнен");
@@ -279,12 +304,7 @@ namespace TwitchBetBot.ViewModels
                     return false;
                 }
 
-                // Сохраняем введенные данные
-                SaveConfigToModel();
-                _config.Save();
-
-                // Проверяем токен
-                var validation = await _authService.ValidateToken(_config.AccessToken);
+                var validation = await _authService.ValidateToken(AccessToken);
                 if (validation == null)
                 {
                     Log("❌ Неверный Access Token");
@@ -293,7 +313,8 @@ namespace TwitchBetBot.ViewModels
 
                 Log($"✅ Токен валиден: {validation.Login}");
 
-             
+                _config.BroadcasterId = await _authService.GetBroadcasterId(
+                    AccessToken, ClientId, ChannelName);
 
                 if (string.IsNullOrEmpty(_config.BroadcasterId))
                 {
@@ -301,9 +322,12 @@ namespace TwitchBetBot.ViewModels
                     return false;
                 }
 
-                Log($"📺 Канал: {_config.ChannelName} (ID: {_config.BroadcasterId})");
+                BroadcasterId = _config.BroadcasterId;
+                Log($"📺 Канал: {ChannelName} (ID: {BroadcasterId})");
 
-                // Проверяем, есть ли уже активная ставка
+                SaveConfigToModel();
+                _config.Save();
+
                 var current = await _predictionService.GetCurrentPredictionAsync();
                 if (current != null)
                 {
@@ -315,6 +339,11 @@ namespace TwitchBetBot.ViewModels
                 Log("✅ Подключено к Twitch!");
                 Log("🎮 Теперь можете запустить мониторинг");
 
+                if (_config.AutoStartChatBot && !IsChatBotRunning && _currentMode == AppMode.Full)
+                {
+                    StartChatBot();
+                }
+
                 return true;
             }
             catch (Exception ex)
@@ -322,14 +351,13 @@ namespace TwitchBetBot.ViewModels
                 Log($"❌ Ошибка подключения: {ex.Message}");
                 return false;
             }
-         
         }
 
         // ========== Мониторинг ==========
 
         private void ToggleMonitoring()
         {
-            if (!IsConnected)
+            if (_currentMode == AppMode.Full && !IsConnected)
             {
                 Log("⚠️ Сначала подключитесь к Twitch");
                 return;
@@ -347,7 +375,7 @@ namespace TwitchBetBot.ViewModels
 
         private void StartMonitoring()
         {
-            if (!IsConnected)
+            if (_currentMode == AppMode.Full && !IsConnected)
             {
                 Log("⚠️ Сначала подключитесь к Twitch");
                 return;
@@ -369,10 +397,9 @@ namespace TwitchBetBot.ViewModels
             StopGSI();
         }
 
-        // Проверка статуса ставки (вызывается по таймеру)
         private async Task CheckGameStatusAsync()
         {
-            if (!IsMonitoring || !IsConnected) return;
+            if (!IsMonitoring || (_currentMode == AppMode.Full && !IsConnected)) return;
 
             try
             {
@@ -381,7 +408,6 @@ namespace TwitchBetBot.ViewModels
                 {
                     CurrentPrediction = currentPrediction;
 
-                    // Автоматическое закрытие ставки через AutoLockMinutes минут
                     if (_config.AutoLockPredictions && currentPrediction.Status == PredictionStatus.ACTIVE)
                     {
                         var timeActive = DateTime.Now - currentPrediction.CreatedAt;
@@ -407,12 +433,6 @@ namespace TwitchBetBot.ViewModels
 
         private void StartGSI()
         {
-            if (!IsMonitoring)
-            {
-                Log("⚠️ Сначала запустите мониторинг");
-                return;
-            }
-
             try
             {
                 _gameService.Start();
@@ -432,9 +452,60 @@ namespace TwitchBetBot.ViewModels
             IsGameRunning = false;
             Log("🛑 GSI остановлен");
         }
-        // ========== Обработка событий от Dota 2 ==========
 
-        // Игра началась
+        // ========== Чат-бот ==========
+
+        private void StartChatBot()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(BotUsername) || string.IsNullOrEmpty(BotAccessToken))
+                {
+                    Log("⚠️ Данные чат-бота не заполнены");
+                    return;
+                }
+
+                if (!IsConnected)
+                {
+                    Log("⚠️ Сначала подключитесь к Twitch");
+                    return;
+                }
+
+                _chatService = new TwitchChatService(
+                    BotUsername,
+                    BotAccessToken,
+                    ChannelName,
+                    _sessionStats);
+
+                _chatService.OnLogMessage += (msg) => Log(msg);
+                _chatService.Connect();
+
+                IsChatBotRunning = true;
+                Log("🤖 Чат-бот запущен");
+            }
+            catch (Exception ex)
+            {
+                Log($"❌ Ошибка запуска чат-бота: {ex.Message}");
+            }
+        }
+
+        private void StopChatBot()
+        {
+            try
+            {
+                _chatService?.Disconnect();
+                _chatService = null;
+                IsChatBotRunning = false;
+                Log("🛑 Чат-бот остановлен");
+            }
+            catch (Exception ex)
+            {
+                Log($"❌ Ошибка остановки чат-бота: {ex.Message}");
+            }
+        }
+
+        // ========== События Dota 2 ==========
+
         private async void OnGSIGameStarted(object sender, Dota2Match match)
         {
             try
@@ -449,8 +520,7 @@ namespace TwitchBetBot.ViewModels
                 IsGameRunning = true;
                 Log($"🎮 ИГРА НАЧАЛАСЬ!");
 
-                // Если включено авто-создание ставок
-                if (_config.AutoCreatePredictions && IsConnected)
+                if (_currentMode == AppMode.Full && _config.AutoCreatePredictions && IsConnected)
                 {
                     Log("🔄 Принудительное обновление данных Twitch...");
                     await _predictionService.ForceRefresh();
@@ -466,7 +536,6 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Попытка создать ставку
         private async Task TryCreatePrediction(Dota2Match match)
         {
             try
@@ -485,7 +554,6 @@ namespace TwitchBetBot.ViewModels
                     Log($"⚠️ Найдена ставка: {activePrediction.Title}");
                     Log($"   Статус: {activePrediction.Status}, ID: {activePrediction.Id}");
 
-                    // Если ставка завершена - создаем новую
                     if (activePrediction.Status == PredictionStatus.RESOLVED ||
                         activePrediction.Status == PredictionStatus.CANCELED)
                     {
@@ -504,7 +572,6 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Создание ставки для конкретного матча
         private async Task CreatePredictionForMatch(Dota2Match match)
         {
             try
@@ -541,19 +608,17 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Игра закончилась
         private async void OnGSIGameEnded(object sender, Dota2Match match)
         {
             try
             {
                 IsGameRunning = false;
 
-                // СЛУЧАЙ 1: Дисконнект/лив
                 if (match == null)
                 {
                     Log("ℹ️ Получен сигнал об окончании игры (дисконнект)");
 
-                    if (_config.AutoEndPredictions && CurrentPrediction != null)
+                    if (_currentMode == AppMode.Full && _config.AutoEndPredictions && CurrentPrediction != null)
                     {
                         Log("🚫 Дисконнект - отменяем ставку...");
                         await CancelPredictionOnDisconnect();
@@ -564,12 +629,11 @@ namespace TwitchBetBot.ViewModels
                     return;
                 }
 
-                // СЛУЧАЙ 2: Явная отмена (CANCELED)
                 if (match.Winner == "CANCELED" || match.Status == MatchStatus.Canceled)
                 {
                     Log($"🚫 МАТЧ ОТМЕНЕН из-за дисконнекта!");
 
-                    if (_config.AutoEndPredictions && CurrentPrediction != null)
+                    if (_currentMode == AppMode.Full && _config.AutoEndPredictions && CurrentPrediction != null)
                     {
                         await CancelPredictionOnDisconnect();
                     }
@@ -579,7 +643,6 @@ namespace TwitchBetBot.ViewModels
                     return;
                 }
 
-                // СЛУЧАЙ 3: Нормальное завершение с победителем
                 Log($"🏁 ИГРА ЗАВЕРШЕНА!");
 
                 if (match.Duration != null)
@@ -594,11 +657,14 @@ namespace TwitchBetBot.ViewModels
 
                 CurrentMatch = null;
 
-                if (_config.AutoEndPredictions && CurrentPrediction != null)
+                if (_currentMode == AppMode.Full && _config.AutoEndPredictions && CurrentPrediction != null)
                 {
-                    await Task.Delay(5000); // Даем время на обработку
+                    await Task.Delay(5000);
                     await EndPredictionForMatch(match);
                 }
+
+                SaveConfigToModel();
+                _config.Save();
 
                 await CleanupAfterGame();
             }
@@ -608,7 +674,49 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Завершение ставки по результатам матча
+        private async Task CancelPredictionOnDisconnect()
+        {
+            try
+            {
+                if (CurrentPrediction == null)
+                {
+                    Log("⚠️ Нет активной ставки для отмены");
+                    return;
+                }
+
+                if (!IsConnected)
+                {
+                    Log("⚠️ Нет подключения к Twitch, пробую восстановить...");
+                    var connected = await ConnectToTwitchAsync();
+
+                    if (!connected)
+                    {
+                        Log("❌ Не удалось подключиться к Twitch, ставка не отменена");
+                        return;
+                    }
+                }
+
+                Log($"🚫 Отмена ставки: {CurrentPrediction.Title}");
+
+                var success = await _predictionService.CancelPredictionAsync();
+
+                if (success)
+                {
+                    Log($"✅ Ставка успешно отменена! Баллы возвращены зрителям.");
+                    CurrentPrediction = null;
+                    _gameService.ResetPredictionFlag();
+                }
+                else
+                {
+                    Log("❌ Не удалось отменить ставку через API");
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"❌ Ошибка отмены ставки: {ex.Message}");
+            }
+        }
+
         private async Task EndPredictionForMatch(Dota2Match match)
         {
             try
@@ -645,7 +753,6 @@ namespace TwitchBetBot.ViewModels
 
                 Log($"🏆 Авто-завершение ставки в пользу: {match.Winner}");
 
-                // Ищем ID победившего исхода
                 string winningOutcomeId = null;
                 foreach (var outcome in CurrentPrediction.Outcomes)
                 {
@@ -679,51 +786,6 @@ namespace TwitchBetBot.ViewModels
                 Log($"❌ Ошибка авто-завершения ставки: {ex.Message}");
             }
         }
-        // ========== Отмена ставки при дисконнекте ==========
-
-        private async Task CancelPredictionOnDisconnect()
-        {
-            try
-            {
-                if (CurrentPrediction == null)
-                {
-                    Log("⚠️ Нет активной ставки для отмены");
-                    return;
-                }
-
-                if (!IsConnected)
-                {
-                    Log("⚠️ Нет подключения к Twitch, пробую восстановить...");
-                    var connected = await ConnectToTwitchAsync();
-
-                    if (!connected)
-                    {
-                        Log("❌ Не удалось подключиться к Twitch, ставка не отменена");
-                        return;
-                    }
-                }
-
-                Log($"🚫 Отмена ставки: {CurrentPrediction.Title}");
-
-                var success = await _predictionService.CancelPredictionAsync();
-
-                if (success)
-                {
-                    Log($"✅ Ставка успешно отменена! Баллы возвращены зрителям.");
-                    CurrentPrediction = null;
-                }
-                else
-                {
-                    Log("❌ Не удалось отменить ставку через API");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"❌ Ошибка отмены ставки: {ex.Message}");
-            }
-        }
-
-        // ========== Очистка памяти после игры ==========
 
         private async Task CleanupAfterGame()
         {
@@ -732,7 +794,6 @@ namespace TwitchBetBot.ViewModels
                 Log("🧹 Очистка после игры...");
                 await Task.Delay(1000);
 
-                // Принудительно вызываем сборщик мусора
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
 
@@ -745,44 +806,16 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // ========== Автоочистка логов ==========
+        // ========== Ручные операции ==========
 
-        private void CleanupOldLogs()
-        {
-            try
-            {
-                if (_logLines.Count > MAX_LOG_LINES)
-                {
-                    int beforeCount = _logLines.Count;
-                    int removedCount = beforeCount - MAX_LOG_LINES;
-
-                    _logLines.RemoveRange(0, removedCount);
-                    LogText = string.Join("\n", _logLines);
-                    OnPropertyChanged(nameof(LogText));
-
-                    var logMessage = $"[{DateTime.Now:HH:mm:ss}] 🧹 Автоочистка: удалено {removedCount} старых строк (всего было {beforeCount})";
-                    _logLines.Add(logMessage);
-                    LogText = string.Join("\n", _logLines);
-                    OnPropertyChanged(nameof(LogText));
-
-                    System.Diagnostics.Debug.WriteLine(logMessage);
-                }
-                else
-                {
-                    System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ Логов мало: {_logLines.Count}/{MAX_LOG_LINES}");
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Ошибка при очистке логов: {ex.Message}");
-            }
-        }
-
-        // ========== Ручные операции со ставками ==========
-
-        // Тестовая ставка
         private async Task TestPredictionAsync()
         {
+            if (_currentMode != AppMode.Full)
+            {
+                Log("⚠️ Тестовая ставка доступна только в полном режиме");
+                return;
+            }
+
             if (!IsConnected)
             {
                 Log("⚠️ Сначала подключитесь к Twitch");
@@ -796,7 +829,7 @@ namespace TwitchBetBot.ViewModels
                 var outcomes = new[] { "Radiant", "Dire" };
 
                 var prediction = await _predictionService.CreatePredictionAsync(
-                    title, outcomes, 120); // 2 минуты
+                    title, outcomes, 120);
 
                 if (prediction != null)
                 {
@@ -810,9 +843,14 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Создать ставку вручную
         private async Task CreatePredictionAsync()
         {
+            if (_currentMode != AppMode.Full)
+            {
+                Log("⚠️ Создание ставки доступно только в полном режиме");
+                return;
+            }
+
             if (!IsConnected)
             {
                 Log("⚠️ Сначала подключитесь к Twitch");
@@ -846,9 +884,14 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Закрыть прием ставок
         private async Task LockPredictionAsync()
         {
+            if (_currentMode != AppMode.Full)
+            {
+                Log("⚠️ Управление ставками доступно только в полном режиме");
+                return;
+            }
+
             if (CurrentPrediction == null)
             {
                 Log("⚠️ Нет активной ставки");
@@ -877,9 +920,14 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Завершить ставку с победителем
         private async Task EndPredictionAsync(string winner)
         {
+            if (_currentMode != AppMode.Full)
+            {
+                Log("⚠️ Управление ставками доступно только в полном режиме");
+                return;
+            }
+
             if (CurrentPrediction == null)
             {
                 Log("⚠️ Нет активной ставки");
@@ -930,9 +978,14 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // Отменить ставку
         private async Task CancelPredictionAsync()
         {
+            if (_currentMode != AppMode.Full)
+            {
+                Log("⚠️ Управление ставками доступно только в полном режиме");
+                return;
+            }
+
             if (CurrentPrediction == null)
             {
                 Log("⚠️ Нет активной ставки");
@@ -954,9 +1007,7 @@ namespace TwitchBetBot.ViewModels
                 {
                     Log("✅ Ставка отменена");
                     CurrentPrediction = null;
-                    _gameService.ResetForNewGame();
-
-
+                    _gameService.ResetPredictionFlag();
                 }
                 else
                 {
@@ -968,7 +1019,6 @@ namespace TwitchBetBot.ViewModels
                 Log($"❌ Ошибка: {ex.Message}");
             }
         }
-        // ========== Обработка событий от PredictionService ==========
 
         private void OnPredictionCreated(object sender, Prediction prediction)
         {
@@ -986,8 +1036,6 @@ namespace TwitchBetBot.ViewModels
             CurrentPrediction = null;
         }
 
-        // ========== Проверка шифрования ==========
-
         private void TestEncryption_Click()
         {
             bool encryptionWorks = _config.TestEncryption();
@@ -1001,7 +1049,42 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-        // ========== Логирование ==========
+        // ========== Логи ==========
+
+        private void CleanupOldLogs()
+        {
+            try
+            {
+                if (_logLines.Count > MAX_LOG_LINES)
+                {
+                    int beforeCount = _logLines.Count;
+                    int removedCount = beforeCount - MAX_LOG_LINES;
+
+                    _logLines.RemoveRange(0, removedCount);
+                    LogText = string.Join("\n", _logLines);
+                    OnPropertyChanged(nameof(LogText));
+
+                    var logMessage = $"[{DateTime.Now:HH:mm:ss}] 🧹 Автоочистка: удалено {removedCount} старых строк (всего было {beforeCount})";
+                    _logLines.Add(logMessage);
+                    LogText = string.Join("\n", _logLines);
+                    OnPropertyChanged(nameof(LogText));
+
+                    System.Diagnostics.Debug.WriteLine(logMessage);
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[{DateTime.Now:HH:mm:ss}] ✅ Логов мало: {_logLines.Count}/{MAX_LOG_LINES}");
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Ошибка при очистке логов: {ex.Message}");
+            }
+        }
+
+    
+
+
 
         public void Log(string message, bool showTimestamp = true)
         {
@@ -1010,17 +1093,14 @@ namespace TwitchBetBot.ViewModels
                 var timestamp = showTimestamp ? $"[{DateTime.Now:HH:mm:ss}] " : "";
                 var line = timestamp + message;
 
-                // Добавляем в список
                 _logLines.Add(line);
 
-                // Если вдруг список слишком большой - чистим
                 if (_logLines.Count > MAX_LOG_LINES + 100)
                 {
                     int removedCount = _logLines.Count - MAX_LOG_LINES;
                     _logLines.RemoveRange(0, removedCount);
                 }
 
-                // Обновляем текст
                 LogText = string.Join("\n", _logLines);
                 OnPropertyChanged(nameof(LogText));
             }

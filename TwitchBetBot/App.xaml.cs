@@ -4,6 +4,6 @@ namespace TwitchBetBot
 {
     public partial class App : Application
     {
-        
+
     }
 }
