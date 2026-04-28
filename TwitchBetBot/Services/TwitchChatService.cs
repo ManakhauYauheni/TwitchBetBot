@@ -9,6 +9,7 @@ namespace TwitchBetBot.Services
 {
     public class TwitchChatService
     {
+        private System.Timers.Timer _autoMessageTimer;
         private TwitchClient _client;
         private readonly string _botUsername;
         private readonly string _oauthToken;
@@ -47,6 +48,13 @@ namespace TwitchBetBot.Services
 
                 _client.Connect();
                 Log("✅ _client.Connect() вызван");
+                _autoMessageTimer = new System.Timers.Timer(900000); // 900000 мс = 15 минут
+                _autoMessageTimer.Elapsed += (s, e) =>
+                {
+                    SendAutoMessage();
+                };
+                _autoMessageTimer.AutoReset = true;
+                _autoMessageTimer.Start();
             }
             catch (Exception ex)
             {
@@ -54,10 +62,27 @@ namespace TwitchBetBot.Services
             }
         }
 
+
+        private void SendAutoMessage()
+        {
+            try
+            {
+                string message = "Команды: !pts - MMR, !wl - Win/Lose, !stats - подробная статистика, !music - текущий трек, !help - помощь";
+                _client.SendMessage(_channelName, message);
+                Log($"🤖 Авто-сообщение отправлено");
+            }
+            catch (Exception ex)
+            {
+                Log($"❌ Ошибка отправки авто-сообщения: {ex.Message}");
+            }
+        }
+
         public void Disconnect()
         {
             try
             {
+                _autoMessageTimer?.Stop();
+                _autoMessageTimer?.Dispose();
                 _client?.Disconnect();
                 Log("🛑 Чат-бот отключён");
             }
@@ -75,7 +100,7 @@ namespace TwitchBetBot.Services
         private void OnJoinedChannel(object sender, OnJoinedChannelArgs e)
         {
             Log($"✅ Бот зашёл в канал {e.Channel}");
-            _client.SendMessage(e.Channel, "🤖 Бот готов! Команды: !pts, !wnls, !stats, !help");
+            _client.SendMessage(e.Channel, "🤖 Бот готов! Команды: !pts, !wl, !stats, !music, !help");
         }
 
         private void OnConnectionError(object sender, OnConnectionErrorArgs e)
@@ -99,11 +124,15 @@ namespace TwitchBetBot.Services
             {
                 HandleHelpCommand(username);
             }
+            else if (message == "!music")
+            {
+                HandleMusicCommand(username);
+            }
             else if (message == "!pts")
             {
                 HandlePtsCommand(username);
             }
-            else if (message == "!wnls")
+            else if (message == "!wl")
             {
                 HandleWnlsCommand(username);
             }
@@ -115,7 +144,7 @@ namespace TwitchBetBot.Services
 
         private void HandleHelpCommand(string username)
         {
-            string response = $"@{username} Доступные команды: !pts - текущий MMR, !wnls - победы/поражения, !stats - подробная статистика";
+            string response = $"@{username} Доступные команды: !pts - текущий MMR, !wl - Win/Lose, !music - текущий трек, !stats - подробная статистика";
             _client.SendMessage(_channelName, response);
             Log($"🤖 Ответ на !help: {response}");
         }
@@ -140,12 +169,27 @@ namespace TwitchBetBot.Services
             }
             else
             {
-                response = $"@{username} ℹ️ MMR не установлен. Используйте файл config.json для установки MMR.";
+                response = $"@{username} ℹ️ MMR не установлен.";
             }
 
             _client.SendMessage(_channelName, response);
             Log($"🤖 Ответ на !pts: {response}");
         }
+
+        private void HandleMusicCommand(string username)
+        {
+            string musicInfo = "🎵 Сейчас ничего не играет";
+
+           
+            if (Views.MainWindow.Instance != null)
+            {
+                musicInfo = Views.MainWindow.Instance.GetCurrentMusicInfo();
+            }
+
+            _client.SendMessage(_channelName, $"@{username} {musicInfo}");
+            Log($"🤖 Ответ на !music: {musicInfo}");
+        }
+
 
         private void HandleWnlsCommand(string username)
         {
@@ -169,7 +213,7 @@ namespace TwitchBetBot.Services
             _client.SendMessage(_channelName, response);
             Log($"🤖 Ответ на !wnls: {response}");
         }
-
+        
         private void HandleStatsCommand(string username)
         {
             string duration = $"{(int)_stats.SessionDuration.TotalHours}ч {_stats.SessionDuration.Minutes}м";
@@ -195,7 +239,7 @@ namespace TwitchBetBot.Services
                 response += $"\nMMR: {_stats.CurrentMmr} ({_stats.RankTitle})";
             }
 
-            // Разбиваем длинные сообщения
+      
             if (response.Length > 500)
             {
                 string[] parts = response.Split('\n');

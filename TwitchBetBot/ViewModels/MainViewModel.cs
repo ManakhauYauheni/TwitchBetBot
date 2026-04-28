@@ -1,4 +1,5 @@
 ﻿using Dota2GSI;
+using Dota2GSI.Nodes;
 using System;
 using System.ComponentModel;
 using System.IO;
@@ -90,7 +91,12 @@ namespace TwitchBetBot.ViewModels
         public string BroadcasterId { get; set; } = "";
         public string BotUsername { get; set; } = "";
         public string BotAccessToken { get; set; } = "";
-        public bool IsChatBotRunning { get; set; } = false;
+        private bool _isChatBotRunning = false;
+        public bool IsChatBotRunning
+        {
+            get => _isChatBotRunning;
+            set => SetProperty(ref _isChatBotRunning, value);
+        }
 
         // ========== Команды ==========
 
@@ -257,10 +263,17 @@ namespace TwitchBetBot.ViewModels
             _currentMode = AppMode.Full;
             Log("🌊 Переключено в полный режим (с Twitch)");
 
+            
+
+
             if (!IsConnected && !string.IsNullOrEmpty(AccessToken) && !string.IsNullOrEmpty(ClientId) && !string.IsNullOrEmpty(ChannelName))
             {
                 _ = ConnectToTwitchAsync();
             }
+
+           
+
+
         }
 
         public void SwitchToTrackerMode()
@@ -339,9 +352,29 @@ namespace TwitchBetBot.ViewModels
                 Log("✅ Подключено к Twitch!");
                 Log("🎮 Теперь можете запустить мониторинг");
 
+
+
+                if (_currentMode == AppMode.Full && !IsMonitoring)
+                {
+                    StartMonitoring();
+                }
+
+                
                 if (_config.AutoStartChatBot && !IsChatBotRunning && _currentMode == AppMode.Full)
                 {
                     StartChatBot();
+                    
+                }
+
+
+
+
+                return true;
+
+
+                if (_currentMode == AppMode.Full && !IsMonitoring)
+                {
+                    StartMonitoring();
                 }
 
                 return true;
@@ -583,7 +616,7 @@ namespace TwitchBetBot.ViewModels
                 }
 
                 var title = $"Dota 2: {match.RadiantTeam} vs {match.DireTeam} - Кто победит?";
-                var outcomes = new[] { match.RadiantTeam, match.DireTeam };
+                var outcomes = new[] { "Win", "Lose" }; // ← ИЗМЕНЕНО
 
                 Log($"🎲 Авто-создание ставки: {title}");
 
@@ -751,12 +784,16 @@ namespace TwitchBetBot.ViewModels
                     return;
                 }
 
-                Log($"🏆 Авто-завершение ставки в пользу: {match.Winner}");
+                // Определяем, победил ли стример
+                bool playerWon = (match.Winner == match.PlayerTeam);  // ← ИСПОЛЬЗУЕМ match.PlayerTeam
+                string winningOutcomeTitle = playerWon ? "Win" : "Lose";
+
+                Log($"🏆 Авто-завершение ставки в пользу: {winningOutcomeTitle}");
 
                 string winningOutcomeId = null;
                 foreach (var outcome in CurrentPrediction.Outcomes)
                 {
-                    if (outcome.Title.Contains(match.Winner, StringComparison.OrdinalIgnoreCase))
+                    if (outcome.Title == winningOutcomeTitle)
                     {
                         winningOutcomeId = outcome.Id;
                         break;
@@ -766,14 +803,14 @@ namespace TwitchBetBot.ViewModels
                 if (string.IsNullOrEmpty(winningOutcomeId))
                 {
                     winningOutcomeId = CurrentPrediction.Outcomes[0].Id;
-                    Log($"⚠️ Не найден outcome для {match.Winner}, использую первый");
+                    Log($"⚠️ Не найден outcome для {winningOutcomeTitle}, использую первый");
                 }
 
                 var success = await _predictionService.EndPredictionAsync(winningOutcomeId);
 
                 if (success)
                 {
-                    Log($"✅ Ставка авто-завершена в пользу {match.Winner}!");
+                    Log($"✅ Ставка авто-завершена в пользу {winningOutcomeTitle}!");
                     CurrentPrediction = null;
                 }
                 else
@@ -1086,13 +1123,15 @@ namespace TwitchBetBot.ViewModels
 
 
 
-        public void Log(string message, bool showTimestamp = true)
+    
+            public void Log(string message, bool showTimestamp = true)
         {
             try
             {
                 var timestamp = showTimestamp ? $"[{DateTime.Now:HH:mm:ss}] " : "";
                 var line = timestamp + message;
 
+                // Добавляем в список для UI
                 _logLines.Add(line);
 
                 if (_logLines.Count > MAX_LOG_LINES + 100)
@@ -1101,8 +1140,13 @@ namespace TwitchBetBot.ViewModels
                     _logLines.RemoveRange(0, removedCount);
                 }
 
+                // Обновляем UI
                 LogText = string.Join("\n", _logLines);
                 OnPropertyChanged(nameof(LogText));
+
+                // ========== ЗАПИСЫВАЕМ В ФАЙЛ ==========
+                Utils.FileLogger.WriteLine(line);
+                // =====================================
             }
             catch (Exception ex)
             {
@@ -1110,4 +1154,4 @@ namespace TwitchBetBot.ViewModels
             }
         }
     }
-}
+    }

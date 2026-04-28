@@ -24,7 +24,7 @@ namespace TwitchBetBot.Services
         private string _lastGameState = "";
         private bool _predictionCreated = false;
         private bool _teamShowcaseDetected = false;
-
+        private string _lastProcessedMatchId = "";
         private Dota2Match _currentMatch;
         private bool _isInGame;
         private string _playerTeam = ""; // Команда локального игрока (Radiant/Dire)
@@ -150,7 +150,7 @@ namespace TwitchBetBot.Services
         {
             try
             {
-                // Пробуем получить команду из Team (это enum PlayerTeam)
+                
                 var teamEnum = gs.Player?.LocalPlayer?.Team;
 
                 if (teamEnum.HasValue)
@@ -159,7 +159,6 @@ namespace TwitchBetBot.Services
                     if (teamEnum.Value == PlayerTeam.Dire) return "Dire";
                 }
 
-                // Если не пришло, используем PlayerSlot
                 int slot = gs.Player?.LocalPlayer?.PlayerSlot ?? -1;
                 if (slot >= 0 && slot <= 4) return "Radiant";
                 if (slot >= 128 && slot <= 132) return "Dire";
@@ -238,6 +237,7 @@ namespace TwitchBetBot.Services
                 }
                 else if (gameState.Contains("GAME_IN_PROGRESS"))
                 {
+
                     if (!_isInGame)
                     {
                         if (_disconnectDetected)
@@ -253,9 +253,11 @@ namespace TwitchBetBot.Services
                         // Определяем команду локального игрока
                         _playerTeam = GetPlayerTeam(gs);
                         LogToUI($"📊 Ты играешь за: {_playerTeam}");
+                       
 
                         CurrentMatch = new Dota2Match
                         {
+                            PlayerTeam = _playerTeam,
                             MatchId = map.MatchID.ToString(),
                             RadiantTeam = "Radiant",
                             DireTeam = "Dire",
@@ -264,7 +266,7 @@ namespace TwitchBetBot.Services
                             Winner = "",
                             GameMode = map.CustomGameName ?? ""
                         };
-
+                        _lastProcessedMatchId = "";
                         LogToUI($"🎮 ИГРА НАЧАЛАСЬ!");
 
                         if (!_predictionCreated)
@@ -446,10 +448,12 @@ namespace TwitchBetBot.Services
 
         private async Task EndGame()
         {
+            if (CurrentMatch == null) return;
+            if (CurrentMatch.MatchId == _lastProcessedMatchId) return;
+            _lastProcessedMatchId = CurrentMatch.MatchId;
+
             try
             {
-                if (CurrentMatch == null) return;
-
                 _isInGame = false;
                 _predictionCreated = false;
                 _teamShowcaseDetected = false;
@@ -463,47 +467,37 @@ namespace TwitchBetBot.Services
                     LogToUI("❌ Победитель не определён!");
                     CurrentMatch.Winner = "Unknown";
                 }
-
-                // Определяем рейтинговую игру и победителя через OpenDota
-                if (long.TryParse(CurrentMatch.MatchId, out long matchId))
+                else
                 {
-                    var (isRanked, radiantWin) = await _openDotaService.GetMatchInfo(matchId);
-
-                    if (isRanked && SessionStats != null)
+                    if (SessionStats != null && long.TryParse(CurrentMatch.MatchId, out long matchId))
                     {
-                        // Сравниваем команду стримера с победителем матча
-                        bool playerWon = (radiantWin && _playerTeam == "Radiant") ||
-                                         (!radiantWin && _playerTeam == "Dire");
+                        var (isRanked, _) = await _openDotaService.GetMatchInfo(matchId);
 
-                        if (playerWon)
+                        if (isRanked)
                         {
-                            SessionStats.AddRankedWin();
-                            LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR (теперь: {SessionStats.CurrentMmr})");
+                            bool playerWon = (CurrentMatch.Winner == _playerTeam);
+
+                            if (playerWon)
+                            {
+                                SessionStats.AddRankedWin();
+                                LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR (теперь: {SessionStats.CurrentMmr})");
+                            }
+                            else
+                            {
+                                SessionStats.AddRankedLoss();
+                                LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR (теперь: {SessionStats.CurrentMmr})");
+                            }
                         }
                         else
                         {
-                            SessionStats.AddRankedLoss();
-                            LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR (теперь: {SessionStats.CurrentMmr})");
+                            if (CurrentMatch.Winner == "Radiant")
+                                SessionStats.AddUnrankedWin();
+                            else
+                                SessionStats.AddUnrankedLoss();
+
+                            LogToUI($"📊 Нерейтинговая игра, MMR не меняется");
                         }
                     }
-                    else
-                    {
-                        // Нерейтинговая игра — считаем только статистику
-                        if (CurrentMatch.Winner == "Radiant")
-                        {
-                            SessionStats?.AddUnrankedWin();
-                            LogToUI($"📊 Нерейтинговая победа, MMR не меняется");
-                        }
-                        else if (CurrentMatch.Winner == "Dire")
-                        {
-                            SessionStats?.AddUnrankedLoss();
-                            LogToUI($"📊 Нерейтинговое поражение, MMR не меняется");
-                        }
-                    }
-                }
-                else
-                {
-                    LogToUI("⚠️ Не удалось распарсить MatchID");
                 }
 
                 LogToUI($"🏁 ИГРА ЗАВЕРШЕНА!");
@@ -518,6 +512,7 @@ namespace TwitchBetBot.Services
                 LogToUI($"❌ Ошибка EndGame: {ex.Message}");
             }
         }
+
 
         public void Stop()
         {

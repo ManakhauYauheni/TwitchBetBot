@@ -32,8 +32,8 @@ namespace TwitchBetBot.Models
         // Режим игры
         public string GameMode { get; set; } = "Unknown";
 
-      
-       
+        public string PlayerTeam { get; set; } = "";
+
     }
 
     // Возможные статусы матча
