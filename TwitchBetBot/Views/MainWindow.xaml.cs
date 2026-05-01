@@ -2,6 +2,7 @@
 using Microsoft.Web.WebView2.Wpf;
 using Newtonsoft.Json.Linq;
 using System;
+using System.ComponentModel;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -200,10 +201,7 @@ _cacheCleanupTimer.Start();
         }
 
 
-        private async void ClearCacheButton_Click(object sender, RoutedEventArgs e)
-        {
-            await CleanWebView2Cache();
-        }
+      
 
 
 
@@ -253,58 +251,7 @@ _cacheCleanupTimer.Start();
             return $"🎵 {_currentVideoTitle} - {_currentVideoUrl}";
         }
 
-        private async void RefreshMusicBtn_Click(object sender, RoutedEventArgs e)
-        {
-            if (!_isYouTubeInitialized)
-            {
-                await InitializeYouTubePlayer();
-                return;
-            }
-
-            try
-            {
-                string script = @"
-                    (() => {
-                        const videoTitle = document.querySelector('.title.style-scope.ytd-video-primary-info-renderer');
-                        if (videoTitle) {
-                            return JSON.stringify({
-                                title: videoTitle.textContent.trim(),
-                                url: window.location.href
-                            });
-                        }
-                        return null;
-                    })();
-                ";
-
-                string result = await YouTubePlayer.CoreWebView2.ExecuteScriptAsync(script);
-                if (!string.IsNullOrEmpty(result) && result != "null")
-                {
-                    string cleanResult = result.Trim('"');
-                    var data = JObject.Parse(cleanResult);
-                    string title = data["title"]?.ToString();
-                    string url = data["url"]?.ToString();
-
-                    if (!string.IsNullOrEmpty(title))
-                    {
-                        _currentVideoTitle = title;
-                        _currentVideoUrl = url;
-                        CurrentMusicStatus.Text = $"🎵 {_currentVideoTitle}";
-
-                        if (DataContext is MainViewModel vm)
-                        {
-                            vm.Log($"🎵 Текущий трек: {_currentVideoTitle}");
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                if (DataContext is MainViewModel vm)
-                {
-                    vm.Log($"❌ Ошибка обновления: {ex.Message}");
-                }
-            }
-        }
+        
 
         private void ClearLogs_Click(object sender, RoutedEventArgs e)
         {
@@ -389,6 +336,25 @@ _cacheCleanupTimer.Start();
             ConnectionStatusPanel.Visibility = visibility;
         }
 
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            // Останавливаем YouTube плеер
+            if (YouTubePlayer?.CoreWebView2 != null)
+            {
+                try
+                {
+                    // Останавливаем видео
+                    string stopScript = "document.querySelector('video')?.pause();";
+                    YouTubePlayer.CoreWebView2.ExecuteScriptAsync(stopScript);
+
+                    // Убиваем WebView2 процесс
+                    YouTubePlayer.CoreWebView2.Stop();
+                }
+                catch { }
+            }
+
+            base.OnClosing(e);
+        }
 
         protected override void OnClosed(EventArgs e)
         {

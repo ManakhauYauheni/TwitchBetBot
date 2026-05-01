@@ -106,8 +106,8 @@ namespace TwitchBetBot.ViewModels
         public ICommand StopGSICommand { get; }
         public ICommand CreatePredictionCommand { get; }
         public ICommand LockPredictionCommand { get; }
-        public ICommand EndPredictionRadiantCommand { get; }
-        public ICommand EndPredictionDireCommand { get; }
+        public ICommand EndPredictionWinCommand { get; }
+        public ICommand EndPredictionLoseCommand { get; }
         public ICommand CancelPredictionCommand { get; }
         public ICommand SaveConfigCommand { get; }
         public ICommand TestPredictionCommand { get; }
@@ -151,11 +151,10 @@ namespace TwitchBetBot.ViewModels
             StopGSICommand = new RelayCommand(StopGSI);
             CreatePredictionCommand = new RelayCommand(() => _ = CreatePredictionAsync());
             LockPredictionCommand = new RelayCommand(() => _ = LockPredictionAsync());
-            EndPredictionRadiantCommand = new RelayCommand(() => _ = EndPredictionAsync("Radiant"));
-            EndPredictionDireCommand = new RelayCommand(() => _ = EndPredictionAsync("Dire"));
+            EndPredictionWinCommand = new RelayCommand(() => _ = EndPredictionAsync("Win"));
+            EndPredictionLoseCommand = new RelayCommand(() => _ = EndPredictionAsync("Lose"));
             CancelPredictionCommand = new RelayCommand(() => _ = CancelPredictionAsync());
-            SaveConfigCommand = new RelayCommand(SaveConfig);
-            TestPredictionCommand = new RelayCommand(() => _ = TestPredictionAsync());
+            SaveConfigCommand = new RelayCommand(SaveConfig);   
             TestEncryptionCommand = new RelayCommand(TestEncryption_Click);
             StartChatBotCommand = new RelayCommand(StartChatBot);
             StopChatBotCommand = new RelayCommand(StopChatBot);
@@ -357,27 +356,19 @@ namespace TwitchBetBot.ViewModels
                 if (_currentMode == AppMode.Full && !IsMonitoring)
                 {
                     StartMonitoring();
+                    StartChatBot();
                 }
 
-                
+
                 if (_config.AutoStartChatBot && !IsChatBotRunning && _currentMode == AppMode.Full)
                 {
                     StartChatBot();
-                    
                 }
 
 
 
-
                 return true;
-
-
-                if (_currentMode == AppMode.Full && !IsMonitoring)
-                {
-                    StartMonitoring();
-                }
-
-                return true;
+   
             }
             catch (Exception ex)
             {
@@ -615,7 +606,7 @@ namespace TwitchBetBot.ViewModels
                     return;
                 }
 
-                var title = $"Dota 2: {match.RadiantTeam} vs {match.DireTeam} - Кто победит?";
+                var title = $"Победит ли стример?";
                 var outcomes = new[] { "Win", "Lose" }; // ← ИЗМЕНЕНО
 
                 Log($"🎲 Авто-создание ставки: {title}");
@@ -785,7 +776,7 @@ namespace TwitchBetBot.ViewModels
                 }
 
                 // Определяем, победил ли стример
-                bool playerWon = (match.Winner == match.PlayerTeam);  // ← ИСПОЛЬЗУЕМ match.PlayerTeam
+                bool playerWon = (match.Winner == match.PlayerTeam);  
                 string winningOutcomeTitle = playerWon ? "Win" : "Lose";
 
                 Log($"🏆 Авто-завершение ставки в пользу: {winningOutcomeTitle}");
@@ -845,40 +836,7 @@ namespace TwitchBetBot.ViewModels
 
         // ========== Ручные операции ==========
 
-        private async Task TestPredictionAsync()
-        {
-            if (_currentMode != AppMode.Full)
-            {
-                Log("⚠️ Тестовая ставка доступна только в полном режиме");
-                return;
-            }
-
-            if (!IsConnected)
-            {
-                Log("⚠️ Сначала подключитесь к Twitch");
-                return;
-            }
-
-            try
-            {
-                Log("🧪 Тестовая ставка...");
-                var title = "Тестовая ставка - Кто победит?";
-                var outcomes = new[] { "Radiant", "Dire" };
-
-                var prediction = await _predictionService.CreatePredictionAsync(
-                    title, outcomes, 120);
-
-                if (prediction != null)
-                {
-                    CurrentPrediction = prediction;
-                    Log("✅ Тестовая ставка создана!");
-                }
-            }
-            catch (Exception ex)
-            {
-                Log($"❌ Ошибка теста: {ex.Message}");
-            }
-        }
+        
 
         private async Task CreatePredictionAsync()
         {
@@ -896,8 +854,8 @@ namespace TwitchBetBot.ViewModels
 
             try
             {
-                var title = $"Dota 2: Radiant vs Dire - Кто победит?";
-                var outcomes = new[] { "Radiant", "Dire" };
+                var title = $"Победит ли стример?";
+                var outcomes = new[] { "Win", "Lose" };
 
                 Log($"🎲 Создание ставки: {title}");
 
@@ -981,10 +939,11 @@ namespace TwitchBetBot.ViewModels
             {
                 Log($"🏆 Завершение в пользу: {winner}");
 
+                // Ищем точное совпадение с Win или Lose
                 string winningOutcomeId = "";
                 foreach (var outcome in CurrentPrediction.Outcomes)
                 {
-                    if (outcome.Title.Contains(winner, StringComparison.OrdinalIgnoreCase))
+                    if (outcome.Title.Equals(winner, StringComparison.OrdinalIgnoreCase))
                     {
                         winningOutcomeId = outcome.Id;
                         break;
@@ -1003,6 +962,7 @@ namespace TwitchBetBot.ViewModels
                 {
                     Log($"✅ Ставка завершена в пользу {winner}!");
                     CurrentPrediction = null;
+                    _gameService.ResetPredictionFlag(); // Сбрасываем флаг для следующей игры
                 }
                 else
                 {
@@ -1014,7 +974,6 @@ namespace TwitchBetBot.ViewModels
                 Log($"❌ Ошибка: {ex.Message}");
             }
         }
-
         private async Task CancelPredictionAsync()
         {
             if (_currentMode != AppMode.Full)

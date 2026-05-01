@@ -150,24 +150,40 @@ namespace TwitchBetBot.Services
         {
             try
             {
-                
                 var teamEnum = gs.Player?.LocalPlayer?.Team;
 
                 if (teamEnum.HasValue)
                 {
-                    if (teamEnum.Value == PlayerTeam.Radiant) return "Radiant";
-                    if (teamEnum.Value == PlayerTeam.Dire) return "Dire";
+                    if (teamEnum.Value == PlayerTeam.Radiant)
+                    {
+                        LogToUI($"🎯 Определена команда игрока: RADIANT");
+                        return "Radiant";
+                    }
+                    if (teamEnum.Value == PlayerTeam.Dire)
+                    {
+                        LogToUI($"🎯 Определена команда игрока: DIRE");
+                        return "Dire";
+                    }
                 }
 
                 int slot = gs.Player?.LocalPlayer?.PlayerSlot ?? -1;
-                if (slot >= 0 && slot <= 4) return "Radiant";
-                if (slot >= 128 && slot <= 132) return "Dire";
+                if (slot >= 0 && slot <= 4)
+                {
+                    LogToUI($"🎯 Определена команда игрока по слоту: RADIANT (slot={slot})");
+                    return "Radiant";
+                }
+                if (slot >= 128 && slot <= 132)
+                {
+                    LogToUI($"🎯 Определена команда игрока по слоту: DIRE (slot={slot})");
+                    return "Dire";
+                }
             }
             catch (Exception ex)
             {
                 LogToUI($"⚠️ Ошибка определения команды: {ex.Message}");
             }
 
+            LogToUI($"⚠️ НЕ УДАЛОСЬ ОПРЕДЕЛИТЬ КОМАНДУ ИГРОКА!");
             return "";
         }
 
@@ -475,27 +491,33 @@ namespace TwitchBetBot.Services
 
                         if (isRanked)
                         {
-                            bool playerWon = (CurrentMatch.Winner == _playerTeam);
+                            bool playerWon = CurrentMatch.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
+
+                            LogToUI($"🔍 Рейтинг: Winner={CurrentMatch.Winner}, PlayerTeam={_playerTeam}, Win={playerWon}");
 
                             if (playerWon)
                             {
                                 SessionStats.AddRankedWin();
-                                LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR (теперь: {SessionStats.CurrentMmr})");
+                                LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR");
                             }
                             else
                             {
                                 SessionStats.AddRankedLoss();
-                                LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR (теперь: {SessionStats.CurrentMmr})");
+                                LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR");
                             }
                         }
-                        else
+                        else // нерейтинговая
                         {
-                            if (CurrentMatch.Winner == "Radiant")
+                            bool playerWon = CurrentMatch.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
+
+                            LogToUI($"🔍 Нерейтинг: Winner={CurrentMatch.Winner}, PlayerTeam={_playerTeam}, Win={playerWon}");
+
+                            if (playerWon)
                                 SessionStats.AddUnrankedWin();
                             else
                                 SessionStats.AddUnrankedLoss();
 
-                            LogToUI($"📊 Нерейтинговая игра, MMR не меняется");
+                            LogToUI($"📊 Нерейтинговая игра: {(playerWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ")}");
                         }
                     }
                 }
