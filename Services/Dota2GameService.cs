@@ -2,6 +2,7 @@
 using Dota2GSI.EventMessages;
 using Dota2GSI.Nodes;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
@@ -27,10 +28,14 @@ namespace TwitchBetBot.Services
         private string _lastProcessedMatchId = "";
         private Dota2Match _currentMatch;
         private bool _isInGame;
-        private string _playerTeam = ""; // Команда локального игрока (Radiant/Dire)
+        private string _playerTeam = "";
         private OpenDotaService _openDotaService;
         private bool _isEndingGame = false;
 
+        private bool _firstBloodHappened = false;
+        private bool _RoshanKillPickupHappened = false;
+
+        public bool WasRoshanKilled => _RoshanKillPickupHappened;
         public SessionStats SessionStats { get; set; }
 
         public Dota2Match CurrentMatch
@@ -53,12 +58,14 @@ namespace TwitchBetBot.Services
             }
         }
 
-        public delegate void GameStartedHandler(object sender, Dota2Match match);
-        public delegate void GameEndedHandler(object sender, Dota2Match match);
-
-        public event GameStartedHandler OnGameStarted;
-        public event GameEndedHandler OnGameEnded;
-
+        public event Action<string, double, Dota2Match> OnFirstBlood;
+        public event Action<string, double> OnRoshanKill;
+        public event Action<Dota2Match> OnGameStarted;
+        public event Action<Dota2Match> OnGameEnded;
+        private bool _gameEventsResetted = false;
+        private int _lastRadiantScore = 0;
+        private int _lastDireScore = 0;
+        private bool _firstBloodBetCreated = false;
         public Dota2GameService(AppConfig config, MainViewModel viewModel, OpenDotaService openDotaService)
         {
             _config = config;
@@ -144,6 +151,18 @@ namespace TwitchBetBot.Services
         {
             LogToUI("🔄 Сброс флага создания ставки для следующей игры");
             _predictionCreated = false;
+            _teamShowcaseDetected = false;
+        }
+
+        public void ResetGameEvents()
+        {
+            _firstBloodHappened = false;
+            _firstBloodBetCreated = false;
+            _RoshanKillPickupHappened = false;
+            _lastRadiantScore = 0;
+            _lastDireScore = 0;
+            _gameEventsResetted = false;
+            LogToUI("🔄 Сброс событий игры (First Blood, RoshanKill)");
         }
 
         private string GetPlayerTeam(GameState gs)
@@ -154,41 +173,27 @@ namespace TwitchBetBot.Services
 
                 if (teamEnum.HasValue)
                 {
-                    if (teamEnum.Value == PlayerTeam.Radiant)
-                    {
-                        LogToUI($"🎯 Определена команда игрока: RADIANT");
-                        return "Radiant";
-                    }
-                    if (teamEnum.Value == PlayerTeam.Dire)
-                    {
-                        LogToUI($"🎯 Определена команда игрока: DIRE");
-                        return "Dire";
-                    }
+                    if (teamEnum.Value == PlayerTeam.Radiant) return "Radiant";
+                    if (teamEnum.Value == PlayerTeam.Dire) return "Dire";
                 }
 
                 int slot = gs.Player?.LocalPlayer?.PlayerSlot ?? -1;
-                if (slot >= 0 && slot <= 4)
-                {
-                    LogToUI($"🎯 Определена команда игрока по слоту: RADIANT (slot={slot})");
-                    return "Radiant";
-                }
-                if (slot >= 128 && slot <= 132)
-                {
-                    LogToUI($"🎯 Определена команда игрока по слоту: DIRE (slot={slot})");
-                    return "Dire";
-                }
+                if (slot >= 0 && slot <= 4) return "Radiant";
+                if (slot >= 128 && slot <= 132) return "Dire";
             }
             catch (Exception ex)
             {
                 LogToUI($"⚠️ Ошибка определения команды: {ex.Message}");
             }
 
-            LogToUI($"⚠️ НЕ УДАЛОСЬ ОПРЕДЕЛИТЬ КОМАНДУ ИГРОКА!");
             return "";
         }
 
+        
+
         private void OnNewGameState(GameState gs)
         {
+            
             try
             {
                 if (gs?.Map == null)
@@ -200,7 +205,7 @@ namespace TwitchBetBot.Services
                 var map = gs.Map;
                 var gameState = map.GameState.ToString();
 
-                LogToUI($"Состояние: {gameState}", false);
+             
 
                 if (_undefinedStartTime.HasValue && gameState != "Undefined")
                 {
@@ -221,8 +226,67 @@ namespace TwitchBetBot.Services
 
                 _lastGameState = gameState;
 
+                // ========== FIRST BLOOD через счёт ==========
+                if (!_firstBloodHappened && gs.Map != null && !IsReplayMatch(gs))
+                {
+                    int currentRadiant = gs.Map.RadiantScore;
+                    int currentDire = gs.Map.DireScore;
+
+                    if (currentRadiant != _lastRadiantScore || currentDire != _lastDireScore)
+                    {
+                        string scoringTeam = "Unknown";
+                        if (currentRadiant > _lastRadiantScore)
+                            scoringTeam = "Radiant";
+                        else if (currentDire > _lastDireScore)
+                            scoringTeam = "Dire";
+
+                        double gameTime = gs.Map?.GameTime ?? 0;
+
+                        LogToUI($"⚡ СЧЁТ ИЗМЕНИЛСЯ: {_lastRadiantScore}:{_lastDireScore} → {currentRadiant}:{currentDire} | Очко получила {scoringTeam}");
+
+                        _firstBloodHappened = true;
+                        LogToUI($"🔥 FIRST BLOOD! Команда {scoringTeam} убила первой на {gameTime:F0} секунде!");
+                        var currentMatch = CurrentMatch;
+                        RunOnUIThread(() => OnFirstBlood?.Invoke(scoringTeam, gameTime, currentMatch));
+                    }
+
+                    _lastRadiantScore = currentRadiant;
+                    _lastDireScore = currentDire;
+                }
+
+                // ========== ROSHAN KILL ==========
+                if (!_RoshanKillPickupHappened && _isInGame && gs.Events != null)
+                {
+                    foreach (var ev in gs.Events)
+                    {
+                        string eventType = ev.EventType.ToString();
+
+                        if (eventType == "Roshan_killed")
+                        {
+                            _RoshanKillPickupHappened = true;
+                            double gameTime = ev.GameTime;
+                            string team = "Unknown";
+
+                            if (ev.Team == PlayerTeam.Radiant)
+                                team = "Radiant";
+                            else if (ev.Team == PlayerTeam.Dire)
+                                team = "Dire";
+
+                            LogToUI($"💀 ROSHAN KILL! Команда {team} убила Рошана первой на {gameTime:F0} секунде!");
+                            RunOnUIThread(() => OnRoshanKill?.Invoke(team, gameTime));
+                            break;
+                        }
+                    }
+                }
+
                 if (gameState.Contains("TEAM_SHOWCASE"))
                 {
+                    if (!_gameEventsResetted)
+                    {
+                        ResetGameEvents();
+                        _gameEventsResetted = true;
+                    }
+
                     if (IsReplayMatch(gs))
                     {
                         LogToUI("🚫 Реплей - пропускаем создание ставки");
@@ -234,28 +298,38 @@ namespace TwitchBetBot.Services
 
                     if (!_isInGame && !_predictionCreated)
                     {
-                        LogToUI("👥 ПОКАЗ КОМАНД - создаём ставку!");
+                        var selectedType = _viewModel.SelectedPredictionType;
 
-                        var tempMatch = new Dota2Match
+                        // Создаём ставку только если это WL или RK (не комбинации)
+                        if (selectedType == PredictionType.WinLose || selectedType == PredictionType.RoshanKill)
                         {
-                            MatchId = map.MatchID.ToString(),
-                            RadiantTeam = "Radiant",
-                            DireTeam = "Dire",
-                            StartTime = DateTime.Now,
-                            Status = MatchStatus.NotStarted,
-                            Winner = ""
-                        };
+                            _predictionCreated = true;
 
-                        LogToUI("🎲 Создание ставки во время показа команд...");
-                        RunOnUIThread(() => OnGameStarted?.Invoke(this, tempMatch));
-                        _predictionCreated = true;
+                            LogToUI($"🎲 СОЗДАНИЕ СТАВКИ В TEAM_SHOWCASE: {selectedType}");
+
+                            var tempMatch = new Dota2Match
+                            {
+                                MatchId = map.MatchID.ToString(),
+                                RadiantTeam = "Radiant",
+                                DireTeam = "Dire",
+                                StartTime = DateTime.Now,
+                                Status = MatchStatus.NotStarted,
+                                Winner = ""
+                            };
+
+                            RunOnUIThread(async () => await _viewModel.CreatePredictionForMatch(tempMatch, selectedType));
+                        }
                     }
                 }
                 else if (gameState.Contains("GAME_IN_PROGRESS"))
                 {
+                   
 
                     if (!_isInGame)
                     {
+
+                        _gameEventsResetted = false;
+
                         if (_disconnectDetected)
                         {
                             LogToUI("⚠️ Игнорируем GAME_IN_PROGRESS после отмены", false);
@@ -265,11 +339,8 @@ namespace TwitchBetBot.Services
                         _undefinedStartTime = null;
                         _disconnectDetected = false;
                         _isInGame = true;
-
-                        // Определяем команду локального игрока
                         _playerTeam = GetPlayerTeam(gs);
                         LogToUI($"📊 Ты играешь за: {_playerTeam}");
-                       
 
                         CurrentMatch = new Dota2Match
                         {
@@ -282,18 +353,15 @@ namespace TwitchBetBot.Services
                             Winner = "",
                             GameMode = map.CustomGameName ?? ""
                         };
+                       
                         _lastProcessedMatchId = "";
                         LogToUI($"🎮 ИГРА НАЧАЛАСЬ!");
 
                         if (!_predictionCreated)
                         {
                             LogToUI("🎲 Создание ставки при старте игры (не было показа команд)");
-                            RunOnUIThread(() => OnGameStarted?.Invoke(this, CurrentMatch));
+                            RunOnUIThread(() => OnGameStarted?.Invoke(CurrentMatch));
                             _predictionCreated = true;
-                        }
-                        else
-                        {
-                            LogToUI("✅ Ставка уже создана во время показа команд", false);
                         }
                     }
                     else if (_isInGame && CurrentMatch != null)
@@ -329,9 +397,42 @@ namespace TwitchBetBot.Services
                 {
                     LogToUI("🤔 Стратегическое время...", false);
                 }
+
                 else if (gameState.Contains("HERO_SELECTION"))
                 {
                     LogToUI("🎭 Выбор героев...", false);
+
+                   
+                    if (_currentMatch == null)
+                    {
+                        _currentMatch = new Dota2Match
+                        {
+                            MatchId = map.MatchID.ToString(),
+                            RadiantTeam = "Radiant",
+                            DireTeam = "Dire",
+                            StartTime = DateTime.Now,
+                            Status = MatchStatus.NotStarted,
+                            Winner = "",
+                            PlayerTeam = GetPlayerTeam(gs)
+                        };
+                        LogToUI($"📊 Создан матч в HERO_SELECTION: {_currentMatch.MatchId}");
+                    }
+
+                    if (!_predictionCreated)
+                    {
+                        var selectedType = _viewModel.SelectedPredictionType;
+
+                        if (selectedType == PredictionType.FirstBlood ||
+                            selectedType == PredictionType.FirstBloodThenWinLose ||
+                            selectedType == PredictionType.FirstBloodThenRoshanKill)
+                        {
+                            _predictionCreated = true;
+
+                            LogToUI($"🎲 СОЗДАНИЕ СТАВКИ В HERO_SELECTION: {selectedType}");
+
+                            RunOnUIThread(async () => await _viewModel.CreatePredictionForMatch(_currentMatch, selectedType));
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -384,7 +485,7 @@ namespace TwitchBetBot.Services
                 CurrentMatch.EndTime = DateTime.Now;
                 CurrentMatch.Duration = CurrentMatch.EndTime.Value - CurrentMatch.StartTime;
 
-                RunOnUIThread(() => OnGameEnded?.Invoke(this, CurrentMatch));
+                RunOnUIThread(() => OnGameEnded?.Invoke(CurrentMatch));
 
                 CurrentMatch = null;
                 _undefinedStartTime = null;
@@ -428,7 +529,7 @@ namespace TwitchBetBot.Services
                 if (_isInGame && CurrentMatch != null)
                 {
                     CurrentMatch.Winner = winner;
-                    RunOnUIThread(() => EndGame());
+                    RunOnUIThread(async () => await EndGame());
                 }
             }
             catch (Exception ex)
@@ -492,24 +593,22 @@ namespace TwitchBetBot.Services
                         if (isRanked)
                         {
                             bool playerWon = CurrentMatch.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
-
                             LogToUI($"🔍 Рейтинг: Winner={CurrentMatch.Winner}, PlayerTeam={_playerTeam}, Win={playerWon}");
 
                             if (playerWon)
                             {
                                 SessionStats.AddRankedWin();
-                                LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR");
+                                LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR (теперь: {SessionStats.CurrentMmr})");
                             }
                             else
                             {
                                 SessionStats.AddRankedLoss();
-                                LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR");
+                                LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR (теперь: {SessionStats.CurrentMmr})");
                             }
                         }
-                        else // нерейтинговая
+                        else
                         {
                             bool playerWon = CurrentMatch.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
-
                             LogToUI($"🔍 Нерейтинг: Winner={CurrentMatch.Winner}, PlayerTeam={_playerTeam}, Win={playerWon}");
 
                             if (playerWon)
@@ -526,15 +625,15 @@ namespace TwitchBetBot.Services
                 LogToUI($"⏱️ Длительность: {CurrentMatch.Duration:mm\\:ss}");
                 LogToUI($"🏆 Победитель: {CurrentMatch.Winner}");
 
-                OnGameEnded?.Invoke(this, CurrentMatch);
+                OnGameEnded?.Invoke(CurrentMatch);
                 CurrentMatch = null;
+              
             }
             catch (Exception ex)
             {
                 LogToUI($"❌ Ошибка EndGame: {ex.Message}");
             }
         }
-
 
         public void Stop()
         {
@@ -551,6 +650,18 @@ namespace TwitchBetBot.Services
 
         public bool IsConnected() => _isListening;
         public bool IsGameRunning() => _isInGame;
+
+        public void ForceResetForNewGame()
+        {
+            _predictionCreated = false;
+            _teamShowcaseDetected = false;
+            _disconnectDetected = false;
+            _isInGame = false;
+            ResetGameEvents();
+            LogToUI("🔄 Принудительный сброс состояния для новой игры");
+        }
+
+        public bool GetPredictionFlag() => _predictionCreated;
 
         #region INotifyPropertyChanged
         public event PropertyChangedEventHandler PropertyChanged;

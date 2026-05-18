@@ -35,7 +35,8 @@ namespace TwitchBetBot.Services
         }
 
         // Создание новой ставки
-        public async Task<Prediction> CreatePredictionAsync(string title, string[] outcomes, int windowSeconds = 300)
+        public async Task<Prediction> 
+            Async(string title, string[] outcomes, int windowSeconds = 300)
         {
             try
             {

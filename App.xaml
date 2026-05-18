@@ -21,5 +21,8 @@
 
         <!-- Для изменения цвета -->
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
+
+        <!-- Для конвертации Enum в Boolean (для RadioButton) -->
+        <local:EnumToBooleanConverter x:Key="EnumToBooleanConverter"/>
     </Application.Resources>
 </Application>

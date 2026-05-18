@@ -134,7 +134,7 @@ namespace TwitchBetBot.Services
             }
             else if (message == "!wl")
             {
-                HandleWnlsCommand(username);
+                HandleWlCommand(username);
             }
             else if (message == "!stats")
             {
@@ -191,69 +191,36 @@ namespace TwitchBetBot.Services
         }
 
 
-        private void HandleWnlsCommand(string username)
+        private void HandleWlCommand(string username)
         {
-            int totalRanked = _stats.RankedWins + _stats.RankedLosses;
-            string response = $"@{username} 📊 Статистика сессии:";
+            int totalWins = _stats.RankedWins + _stats.UnrankedWins;
+            int totalLosses = _stats.RankedLosses + _stats.UnrankedLosses;
+            int totalGames = totalWins + totalLosses;
 
-            if (totalRanked > 0)
-            {
-                response += $" Рейтинговые: {_stats.RankedWins}W {_stats.RankedLosses}L (WR: {_stats.RankedWinRate}%)";
-            }
-            else
-            {
-                response += $" Рейтинговых игр не было";
-            }
+            double winRate = totalGames > 0 ? Math.Round((double)totalWins / totalGames * 100, 1) : 0;
 
-            if (_stats.UnrankedWins + _stats.UnrankedLosses > 0)
-            {
-                response += $" | Нерейтинговые: {_stats.UnrankedWins}W {_stats.UnrankedLosses}L";
-            }
+            string response = $"@{username} 📊 Статистика сессии: {totalWins}W {totalLosses}L (WR: {winRate}%)";
 
             _client.SendMessage(_channelName, response);
-            Log($"🤖 Ответ на !wnls: {response}");
         }
-        
+
         private void HandleStatsCommand(string username)
         {
             string duration = $"{(int)_stats.SessionDuration.TotalHours}ч {_stats.SessionDuration.Minutes}м";
-            string response = $"@{username} 📈 Сессия: {duration}";
 
-            int totalRanked = _stats.RankedWins + _stats.RankedLosses;
-            if (totalRanked > 0)
-            {
-                response += $"\nРейтинговые: {_stats.RankedWins}W {_stats.RankedLosses}L (WR: {_stats.RankedWinRate}%)";
-            }
-            else
-            {
-                response += $"\nРейтинговых игр не было";
-            }
+            int totalWins = _stats.RankedWins + _stats.UnrankedWins;
+            int totalLosses = _stats.RankedLosses + _stats.UnrankedLosses;
+            int totalGames = totalWins + totalLosses;
+            double winRate = totalGames > 0 ? Math.Round((double)totalWins / totalGames * 100, 1) : 0;
 
-            if (_stats.UnrankedWins + _stats.UnrankedLosses > 0)
-            {
-                response += $"\nНерейтинговые: {_stats.UnrankedWins}W {_stats.UnrankedLosses}L";
-            }
+            string response = $"@{username} 📈 Сессия: {duration} | Всего: {totalWins}W {totalLosses}L (WR: {winRate}%)";
 
             if (_stats.CurrentMmr > 0)
             {
-                response += $"\nMMR: {_stats.CurrentMmr} ({_stats.RankTitle})";
+                response += $" | MMR: {_stats.CurrentMmr} ({_stats.RankTitle})";
             }
 
-      
-            if (response.Length > 500)
-            {
-                string[] parts = response.Split('\n');
-                foreach (string part in parts)
-                {
-                    _client.SendMessage(_channelName, $"@{username} {part}");
-                }
-            }
-            else
-            {
-                _client.SendMessage(_channelName, response);
-            }
-
-            Log($"🤖 Ответ на !stats отправлен");
+            _client.SendMessage(_channelName, response);
         }
 
         private void Log(string message)

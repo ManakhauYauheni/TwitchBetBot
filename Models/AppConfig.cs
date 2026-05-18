@@ -6,10 +6,19 @@ using Newtonsoft.Json;
 
 namespace TwitchBetBot.Models
 {
+    // Типы ставок
+    public enum PredictionType
+    {
+        WinLose,               // Кто победит в матче
+        FirstBlood,            // Первая кровь
+        RoshanKill,                 // Первое поднятие RoshanKill
+        FirstBloodThenWinLose, // First Blood → потом Win/Lose
+        FirstBloodThenRoshanKill    // First Blood → потом RoshanKill
+    }
+
     public class AppConfig
     {
         // ========== Twitch настройки ==========
-
         [JsonIgnore]
         public string AccessToken { get; set; } = "";
 
@@ -27,6 +36,13 @@ namespace TwitchBetBot.Models
         public string BotAccessToken { get; set; } = "";
         public bool AutoStartChatBot { get; set; } = true;
 
+
+
+    
+        public bool AutoCreatePredictions { get; set; } = true;
+        public bool AutoEndPredictions { get; set; } = true;
+   
+
         // ========== MMR настройки ==========
         public int CurrentMmr { get; set; } = 0;
 
@@ -36,14 +52,13 @@ namespace TwitchBetBot.Models
 
         // ========== Настройки ставок ==========
         public int PredictionWindowSeconds { get; set; } = 300;
-        public int AutoLockMinutes { get; set; } = 3;
-        public int CheckIntervalSeconds { get; set; } = 30;
+       
 
-        // ========== Автоматизация ==========
-        public bool AutoStartMonitoring { get; set; } = true;
-        public bool AutoCreatePredictions { get; set; } = true;
-        public bool AutoEndPredictions { get; set; } = true;
-        public bool AutoLockPredictions { get; set; } = false;
+        // Один чекбокс на всю автоматику
+        public bool AutomationEnabled { get; set; } = true;
+
+        // Выбранный тип ставки
+        public PredictionType SelectedPredictionType { get; set; } = PredictionType.WinLose;
 
         [JsonIgnore]
         public string ConfigPath { get; set; } = "config.json";

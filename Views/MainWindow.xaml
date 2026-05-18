@@ -4,9 +4,11 @@
         xmlns:wpf="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         xmlns:helpers="clr-namespace:TwitchBetBot"
         Title="Kuraga Bot" 
-        Height="650" 
-        Width="900"
+        Height="700" 
+        Width="950"
         WindowStartupLocation="CenterScreen">
+
+  
 
     <Grid>
         <Grid.RowDefinitions>
@@ -14,7 +16,7 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- ========== HEADER (всегда виден) ========== -->
+        <!-- ========== HEADER ========== -->
         <Border Grid.Row="0" Background="#2D2D2D" Padding="10">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="Kuraga BetBot" 
@@ -22,7 +24,6 @@
                            FontSize="16" 
                            FontWeight="Bold"/>
 
-                <!-- Переключатель режимов -->
                 <StackPanel Orientation="Horizontal" Margin="20,0,0,0">
                     <TextBlock Text="Режим:" Foreground="White" VerticalAlignment="Center" Margin="0,0,5,0"/>
                     <ToggleButton x:Name="ModeToggle" Width="100" Height="25" 
@@ -34,7 +35,6 @@
                     </ToggleButton>
                 </StackPanel>
 
-                <!-- Статус подключения -->
                 <StackPanel Orientation="Horizontal" x:Name="ConnectionStatusPanel">
                     <Ellipse Width="10" Height="10" Margin="10,0,5,0">
                         <Ellipse.Style>
@@ -52,7 +52,6 @@
                                Foreground="White" VerticalAlignment="Center" Margin="0,0,20,0"/>
                 </StackPanel>
 
-                <!-- Статус мониторинга -->
                 <Ellipse Width="10" Height="10" Margin="20,0,5,0">
                     <Ellipse.Style>
                         <Style TargetType="Ellipse">
@@ -75,7 +74,9 @@
                     Grid.Row="1" 
                     SelectionChanged="TabControl_SelectionChanged">
 
+            <!-- ================================================================ -->
             <!-- Вкладка 1: Управление -->
+            <!-- ================================================================ -->
             <TabItem Header="🎮 Управление">
                 <Grid>
                     <Grid.ColumnDefinitions>
@@ -83,10 +84,10 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Левая панель управления -->
+                    <!-- Left Panel - Controls -->
                     <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
                         <StackPanel Margin="10">
-                            <!-- Секция авторизации -->
+                            <!-- Auth Section -->
                             <GroupBox Header="Авторизация" Margin="0,0,0,10" x:Name="AuthSection">
                                 <StackPanel Margin="0,0,0,5">
                                     <TextBlock Text="Access Token:" Margin="0,5,0,2"/>
@@ -121,11 +122,6 @@
                                         </ToggleButton>
                                     </Grid>
 
-                                    <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                        <TextBlock Text="Токен сохранен: " FontSize="10" Foreground="Gray"/>
-                                        <Ellipse Width="8" Height="8" Fill="Green" Margin="2,0"/>
-                                    </StackPanel>
-
                                     <TextBlock Text="Client ID:" Margin="0,5,0,2"/>
                                     <TextBox Text="{Binding ClientId}" Margin="0,0,0,5"/>
 
@@ -137,10 +133,16 @@
                                             Height="30"
                                             Background="#6441A5"
                                             Foreground="White"/>
+                                    <Button Content="🔐 Получить токен через Twitch" 
+        Command="{Binding GetTokenViaOAuthCommand}"
+        Height="30"
+        Background="#9146FF"
+        Foreground="White"
+        Margin="0,5,0,0"/>
                                 </StackPanel>
                             </GroupBox>
 
-                            <!-- Секция Чат-бота -->
+                            <!-- Chat Bot Section -->
                             <GroupBox Header="Чат-бот" Margin="0,0,0,10" x:Name="ChatBotSection">
                                 <StackPanel>
                                     <TextBlock Text="Имя бота:" Margin="0,5,0,2"/>
@@ -149,7 +151,7 @@
                                              ToolTip="Аккаунт бота"/>
 
                                     <TextBlock Text="OAuth токен бота:" Margin="0,5,0,2"/>
-                                    <TextBox Text="{Binding BotAccessToken, UpdateSourceTrigger=PropertyChanged}" 
+                                    <TextBox Text="{Binding BotAccessToken}" 
                                              Margin="0,0,0,5"/>
 
                                     <Grid>
@@ -162,7 +164,7 @@
                                                 Command="{Binding StartChatBotCommand}"
                                                 Height="30"
                                                 Margin="0,0,5,0"
-                                                Background="#9146FF"
+                                                Background="Green"
                                                 Foreground="White"
                                                 Grid.Column="0"/>
 
@@ -195,7 +197,7 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <!-- Секция автоматизации -->
+                            <!-- Automation Section -->
                             <GroupBox Header="Автоматизация" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Button Content="{Binding IsMonitoring, Converter={StaticResource BoolToString}, ConverterParameter='Остановить мониторинг|Запустить мониторинг'}" 
@@ -231,7 +233,7 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <!-- Секция ручного управления предикшенами -->
+                            <!-- Prediction Controls -->
                             <GroupBox Header="Управление Predictions" Margin="0,0,0,10" x:Name="PredictionSection">
                                 <StackPanel>
                                     <Button Content="Создать Prediction" 
@@ -279,23 +281,17 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <!-- Конфиг -->
+                            <!-- Config -->
                             <GroupBox Header="Настройки" Margin="0,0,0,10">
                                 <StackPanel>
                                     <Button Content="Сохранить настройки" 
                                             Command="{Binding SaveConfigCommand}"
                                             Height="25"
                                             Margin="0,5"/>
-
-                                    <TextBlock Text="Настройки сохраняются в config.json"
-                                               FontSize="10"
-                                               Foreground="Gray"
-                                               TextWrapping="Wrap"
-                                               Margin="0,5,0,0"/>
                                 </StackPanel>
                             </GroupBox>
 
-                            <!-- Статус инфо -->
+                            <!-- Status Info -->
                             <Border Background="#f8f9fa" BorderBrush="#ddd" BorderThickness="1" 
                                     CornerRadius="5" Padding="10" Margin="0,10,0,0">
                                 <StackPanel>
@@ -352,7 +348,7 @@
                         </StackPanel>
                     </ScrollViewer>
 
-                    <!-- Логи -->
+                    <!-- Logs -->
                     <Grid Grid.Column="1" Margin="10">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="*"/>
@@ -388,7 +384,9 @@
                 </Grid>
             </TabItem>
 
+            <!-- ================================================================ -->
             <!-- Вкладка 2: YouTube Музыка -->
+            <!-- ================================================================ -->
             <TabItem x:Name="YouTubeTab" Header="🎵 YouTube Музыка">
                 <Grid Margin="10">
                     <Grid.RowDefinitions>
@@ -398,15 +396,148 @@
 
                     <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
                         <TextBlock x:Name="CurrentMusicStatus" 
-                                   Text="🎵 Ожидание..." 
-                                   VerticalAlignment="Center"
-                                   Foreground="Gray"/>
+                       Text="🎵 Ожидание..." 
+                       VerticalAlignment="Center"
+                       Foreground="Gray"/>
                     </StackPanel>
 
                     <wpf:WebView2 x:Name="YouTubePlayer" 
-                                  Grid.Row="1"
-                                  Source="https://www.youtube.com"/>
+                      Grid.Row="1"/>
                 </Grid>
+            </TabItem>
+
+            <!-- ================================================================ -->
+            <!-- Вкладка 3: Настройки -->
+            <!-- ================================================================ -->
+            <TabItem Header="⚙️ Настройки">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="15">
+
+                        <!-- Автоматизация -->
+                        <GroupBox Header="🤖 Автоматизация" Margin="0,0,0,15">
+                            <StackPanel Margin="10">
+                                <CheckBox x:Name="AutomationCheckBox" 
+                                          Content="Включить автоматическое создание и завершение ставок"
+                                          IsChecked="{Binding AutomationEnabled}"
+                                          FontWeight="SemiBold"
+                                          Margin="0,5"/>
+                                <TextBlock Text="При выключении бот не будет создавать и завершать ставки автоматически"
+                                           FontSize="11"
+                                           Foreground="Gray"
+                                           Margin="25,2,0,5"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Тип ставки -->
+                        <GroupBox Header="🎲 Тип ставки по умолчанию" Margin="0,0,0,15">
+                            <StackPanel Margin="10">
+                                <CheckBox x:Name="chkWinLose" 
+                  Content="Win/Lose (кто победит в матче)"
+                  Checked="PredictionType_Checked"
+              
+                  Tag="WinLose"
+                  Margin="0,4"/>
+
+                                <CheckBox x:Name="chkFirstBlood" 
+                  Content="First Blood (какая команда сделает первую кровь)"
+                  Checked="PredictionType_Checked"
+              
+                  Tag="FirstBlood"
+                  Margin="0,4"/>
+
+                                <CheckBox x:Name="chkRoshanKill" 
+                  Content="RoshanKill (какая команда первой убьёт Рошана)"
+                  Checked="PredictionType_Checked"
+          
+                  Tag="RoshanKill"
+                  Margin="0,4"/>
+
+                                <CheckBox x:Name="chkFBThenWinLose" 
+                  Content="First Blood → Win/Lose (две ставки по очереди)"
+                  Checked="PredictionType_Checked"
+               
+                  Tag="FirstBloodThenWinLose"
+                  Margin="0,4"/>
+
+                                <CheckBox x:Name="chkFBThenRoshanKill" 
+                  Content="First Blood → RoshanKill (две ставки по очереди)"
+                  Checked="PredictionType_Checked"
+              
+                  Tag="FirstBloodThenRoshanKill"
+                  Margin="0,4"/>
+
+                                <TextBlock Text="Выбранный тип будет использоваться при автоматическом создании ставок"
+                   FontSize="11"
+                   Foreground="Gray"
+                   Margin="20,5,0,0"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Настройки времени -->
+                        <GroupBox Header="⏱️ Настройки времени" Margin="0,0,0,15">
+                            <StackPanel Margin="10">
+                                <StackPanel Orientation="Horizontal" Margin="0,5">
+                                    <TextBlock Text="Время приёма ставок:" Width="180" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding PredictionWindowSeconds}" Width="80" Margin="5,0"/>
+                                    <TextBlock Text="секунд" VerticalAlignment="Center" Margin="5,0"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Dota 2 -->
+                        <GroupBox Header="🎮 Dota 2" Margin="0,0,0,15">
+                            <StackPanel Margin="10">
+                                <StackPanel Orientation="Horizontal" Margin="0,5">
+                                    <TextBlock Text="Порт GSI:" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding GsiPort}" Width="80" Margin="5,0"/>
+                                </StackPanel>
+
+                                
+
+                                <TextBlock Text="Изменение порта требует перезапуска приложения и удаления конфига из папки доты"
+                                           FontSize="11"
+                                           Foreground="Orange"
+                                           Margin="0,5,0,0"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Статистика и MMR -->
+                        <GroupBox Header="📊 Статистика" Margin="0,0,0,15">
+                            <StackPanel Margin="10">
+                                <StackPanel Orientation="Horizontal" Margin="0,5">
+                                    <TextBlock Text="Текущий MMR:" Width="120" VerticalAlignment="Center"/>
+                                    <TextBox Text="{Binding CurrentMmr}" Width="100" Margin="5,0"/>
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Margin="0,10">
+                                    <TextBlock Text="Ранг:" Width="120" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding RankTitle}" FontWeight="Bold" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <TextBlock Text="MMR меняется автоматически после рейтинговых игр (±25). При ручном изменении сохраняется в конфиг."
+                                           FontSize="11"
+                                           Foreground="Gray"
+                                           Margin="0,10,0,0"
+                                           TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                        <!-- Чат-бот -->
+                        <GroupBox Header="💬 Чат-бот" Margin="0,0,0,15">
+                            <StackPanel Margin="10">
+                                <CheckBox Content="Автоматически запускать чат-бота при подключении к Twitch"
+                                          IsChecked="{Binding AutoStartChatBot}"
+                                          Margin="0,5"/>
+
+                                <TextBlock Text="Бот отвечает на команды: !pts, !wl, !stats, !music, !help"
+                                           FontSize="11"
+                                           Foreground="Gray"
+                                           Margin="25,5,0,0"/>
+                            </StackPanel>
+                        </GroupBox>
+
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
         </TabControl>
