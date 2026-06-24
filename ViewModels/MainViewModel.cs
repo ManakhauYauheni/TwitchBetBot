@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.IO;
 using System.Threading.Tasks;
@@ -44,7 +44,7 @@ namespace TwitchBetBot.ViewModels
         // Для комбинированных ставок
         private bool _waitingForFirstBlood = false;
         private PredictionType _pendingPredictionType = PredictionType.WinLose;
-       
+
         // Настройки
         private bool _automationEnabled;
         private int _predictionWindowSeconds;
@@ -123,8 +123,6 @@ namespace TwitchBetBot.ViewModels
                 }
             }
         }
-
-       
 
         public int GsiPort
         {
@@ -219,7 +217,7 @@ namespace TwitchBetBot.ViewModels
 
             _automationEnabled = _config.AutomationEnabled;
             _predictionWindowSeconds = _config.PredictionWindowSeconds;
-           
+
             _gsiPort = _config.GSIPort;
             _currentMmr = _config.CurrentMmr;
             _selectedPredictionType = _config.SelectedPredictionType;
@@ -236,7 +234,7 @@ namespace TwitchBetBot.ViewModels
             _predictionService = new PredictionService(_config);
             _openDotaService = new OpenDotaService((msg) => Log(msg));
             _gameService = new Dota2GameService(_config, this, _openDotaService);
-          
+
             _sessionStats = new SessionStats();
             _gameService.SessionStats = _sessionStats;
 
@@ -307,7 +305,7 @@ namespace TwitchBetBot.ViewModels
             _config.CurrentMmr = _sessionStats.CurrentMmr;
             _config.AutomationEnabled = AutomationEnabled;
             _config.PredictionWindowSeconds = PredictionWindowSeconds;
-            
+
             _config.GSIPort = GsiPort;
             _config.SelectedPredictionType = SelectedPredictionType;
             _config.AutoStartChatBot = AutoStartChatBot;
@@ -341,13 +339,11 @@ namespace TwitchBetBot.ViewModels
             return "Immortal";
         }
 
-       
-
         private void ResetGameEvents()
         {
             _waitingForFirstBlood = false;
-          
-        
+
+            //_gameService.ResetGameEvents();
             Log("🔄 Сброс состояния комбинированных ставок");
         }
 
@@ -594,17 +590,14 @@ namespace TwitchBetBot.ViewModels
 
         private async void OnGSIGameStarted(Dota2Match match)
         {
-          
+            Log($"🔍 OnGSIGameStarted ВЫЗВАН! match={match?.MatchId}");
+            Log($"🔍 CurrentMatch до присвоения = {CurrentMatch?.MatchId}");
 
             CurrentMatch = match;
-           
+            Log($"🔍 CurrentMatch после присвоения = {CurrentMatch?.MatchId}");
 
             IsGameRunning = true;
             Log($"🎮 ИГРА НАЧАЛАСЬ!");
-
-           
-           
-           
 
             try
             {
@@ -632,7 +625,7 @@ namespace TwitchBetBot.ViewModels
 
         public async Task CreatePredictionForMatch(Dota2Match match, PredictionType predictionType, int customWindowSeconds = 0)
         {
-            
+
             try
             {
                 if (match == null)
@@ -679,7 +672,7 @@ namespace TwitchBetBot.ViewModels
                         outcomes = new[] { "Radiant", "Dire" };
                         _waitingForFirstBlood = true;
                         _pendingPredictionType = PredictionType.RoshanKill;
-                        _pendingWindowSeconds = 180; 
+                        _pendingWindowSeconds = 180;
                         await ExecutePredictionCreation(title, outcomes, 90); // 90 сек на FB
                         break;
 
@@ -714,7 +707,6 @@ namespace TwitchBetBot.ViewModels
 
         private async void OnFirstBloodEvent(string team, double gameTime, Dota2Match match)
         {
-           
 
             try
             {
@@ -730,7 +722,7 @@ namespace TwitchBetBot.ViewModels
                 {
                     _waitingForFirstBlood = false;
 
-                 
+                    // Используем match, который пришёл из события, а не CurrentMatch
                     var savedMatch = match;
                     var pendingType = _pendingPredictionType;
                     var windowSec = _pendingWindowSeconds;
@@ -739,7 +731,7 @@ namespace TwitchBetBot.ViewModels
 
                     if (savedMatch != null)
                     {
-                       
+                        Log($"🔍 Вызов CreatePredictionForMatch с параметрами: match={savedMatch?.MatchId}, type={pendingType}, seconds={windowSec}");
                         await CreatePredictionForMatch(savedMatch, pendingType, windowSec);
                     }
                     else
@@ -762,12 +754,12 @@ namespace TwitchBetBot.ViewModels
         {
             try
             {
-                
+
                 Log($"🔍 OnRoshanKillEvent: Установлен _roshanKilledThisGame = true (Рошан убит командой {team} на {gameTime} сек)");
 
                 Log($"👑 RoshanKill! Команда {team} первой убила Рошана на {gameTime:F0} секунде");
 
-               
+                // Проверяем наличие ставки и её заголовок
                 if (CurrentPrediction != null && CurrentPrediction.Title.Contains("убьёт Рошана"))
                 {
                     Log($"🏆 Завершаем ставку RoshanKill в пользу {team}");
@@ -775,7 +767,7 @@ namespace TwitchBetBot.ViewModels
                 }
                 else
                 {
-                    
+                    // Отладочный лог, чтобы понять, почему условие не сработало
                     Log($"⚠️ Не удалось завершить ставку RoshanKill. CurrentPrediction is null? {CurrentPrediction == null}. Title: '{CurrentPrediction?.Title}'");
                 }
             }
@@ -835,17 +827,14 @@ namespace TwitchBetBot.ViewModels
             }
         }
 
-
         private async void OnGSIGameEnded(Dota2Match match)
         {
             try
             {
                 IsGameRunning = false;
 
-             
-                
+                Log($"🔍 Отладка OnGSIGameEnded: CurrentPrediction = {(CurrentPrediction != null ? CurrentPrediction.Title : "null")}");
 
-              
                 await CancelRoshanKillPredictionIfNoKill();
 
                 if (match == null || match.Winner == "CANCELED" || match.Status == MatchStatus.Canceled)
@@ -882,7 +871,6 @@ namespace TwitchBetBot.ViewModels
                 CurrentMatch = null;
                 _waitingForFirstBlood = false;
 
-                SaveConfig();
                 await CleanupAfterGame();
             }
             catch (Exception ex)
@@ -967,7 +955,8 @@ namespace TwitchBetBot.ViewModels
             {
                 string title;
                 string[] outcomes;
-                int windowSeconds = 0; 
+                int windowSeconds = 0; // Добавляем переменную для времени
+
                 switch (SelectedPredictionType)
                 {
                     case PredictionType.WinLose:
@@ -1224,17 +1213,17 @@ namespace TwitchBetBot.ViewModels
         {
             try
             {
-               
+                Log($"🔍 CancelRoshanKillPredictionIfNoKill: Начало проверки");
 
                 if (CurrentPrediction != null)
                 {
-                    
+                    Log($"🔍 CancelRoshanKillPredictionIfNoKill: Текущая ставка = {CurrentPrediction.Title}");
 
                     if (CurrentPrediction.Title.Contains("убьёт Рошана"))
                     {
-                        
+                        // Используем флаг из GameService
                         bool wasRoshanKilled = _gameService.WasRoshanKilled;
-                        
+                        Log($"🔍 CancelRoshanKillPredictionIfNoKill: _gameService.WasRoshanKilled = {wasRoshanKilled}");
 
                         if (!wasRoshanKilled)
                         {
@@ -1293,7 +1282,5 @@ namespace TwitchBetBot.ViewModels
                 Log("❌ Не удалось получить токен. Авторизация отменена или произошла ошибка.");
             }
         }
-
-
     }
 }
