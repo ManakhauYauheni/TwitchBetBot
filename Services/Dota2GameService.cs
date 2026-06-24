@@ -1,4 +1,4 @@
-﻿using Dota2GSI;
+using Dota2GSI;
 using Dota2GSI.EventMessages;
 using Dota2GSI.Nodes;
 using System;
@@ -66,11 +66,12 @@ namespace TwitchBetBot.Services
         private int _lastRadiantScore = 0;
         private int _lastDireScore = 0;
         private bool _firstBloodBetCreated = false;
+
         public Dota2GameService(AppConfig config, MainViewModel viewModel, OpenDotaService openDotaService)
         {
             _config = config;
             _viewModel = viewModel;
-            _dispatcher = Application.Current.Dispatcher;
+            _dispatcher = System.Windows.Application.Current.Dispatcher;
             _openDotaService = openDotaService;
         }
 
@@ -165,7 +166,7 @@ namespace TwitchBetBot.Services
             LogToUI("🔄 Сброс событий игры (First Blood, RoshanKill)");
         }
 
-        private string GetPlayerTeam(GameState gs)
+        private string GetPlayerTeamFromGSI(GameState gs)
         {
             try
             {
@@ -189,11 +190,8 @@ namespace TwitchBetBot.Services
             return "";
         }
 
-        
-
         private void OnNewGameState(GameState gs)
         {
-            
             try
             {
                 if (gs?.Map == null)
@@ -205,7 +203,7 @@ namespace TwitchBetBot.Services
                 var map = gs.Map;
                 var gameState = map.GameState.ToString();
 
-             
+                LogToUI($"Состояние: {gameState}", false);
 
                 if (_undefinedStartTime.HasValue && gameState != "Undefined")
                 {
@@ -226,7 +224,6 @@ namespace TwitchBetBot.Services
 
                 _lastGameState = gameState;
 
-                // ========== FIRST BLOOD через счёт ==========
                 if (!_firstBloodHappened && gs.Map != null && !IsReplayMatch(gs))
                 {
                     int currentRadiant = gs.Map.RadiantScore;
@@ -254,7 +251,6 @@ namespace TwitchBetBot.Services
                     _lastDireScore = currentDire;
                 }
 
-                // ========== ROSHAN KILL ==========
                 if (!_RoshanKillPickupHappened && _isInGame && gs.Events != null)
                 {
                     foreach (var ev in gs.Events)
@@ -300,7 +296,6 @@ namespace TwitchBetBot.Services
                     {
                         var selectedType = _viewModel.SelectedPredictionType;
 
-                        // Создаём ставку только если это WL или RK (не комбинации)
                         if (selectedType == PredictionType.WinLose || selectedType == PredictionType.RoshanKill)
                         {
                             _predictionCreated = true;
@@ -323,11 +318,8 @@ namespace TwitchBetBot.Services
                 }
                 else if (gameState.Contains("GAME_IN_PROGRESS"))
                 {
-                   
-
                     if (!_isInGame)
                     {
-
                         _gameEventsResetted = false;
 
                         if (_disconnectDetected)
@@ -339,7 +331,7 @@ namespace TwitchBetBot.Services
                         _undefinedStartTime = null;
                         _disconnectDetected = false;
                         _isInGame = true;
-                        _playerTeam = GetPlayerTeam(gs);
+                        _playerTeam = GetPlayerTeamFromGSI(gs);
                         LogToUI($"📊 Ты играешь за: {_playerTeam}");
 
                         CurrentMatch = new Dota2Match
@@ -353,7 +345,7 @@ namespace TwitchBetBot.Services
                             Winner = "",
                             GameMode = map.CustomGameName ?? ""
                         };
-                       
+
                         _lastProcessedMatchId = "";
                         LogToUI($"🎮 ИГРА НАЧАЛАСЬ!");
 
@@ -397,12 +389,10 @@ namespace TwitchBetBot.Services
                 {
                     LogToUI("🤔 Стратегическое время...", false);
                 }
-
                 else if (gameState.Contains("HERO_SELECTION"))
                 {
                     LogToUI("🎭 Выбор героев...", false);
 
-                   
                     if (_currentMatch == null)
                     {
                         _currentMatch = new Dota2Match
@@ -413,7 +403,7 @@ namespace TwitchBetBot.Services
                             StartTime = DateTime.Now,
                             Status = MatchStatus.NotStarted,
                             Winner = "",
-                            PlayerTeam = GetPlayerTeam(gs)
+                            PlayerTeam = GetPlayerTeamFromGSI(gs)
                         };
                         LogToUI($"📊 Создан матч в HERO_SELECTION: {_currentMatch.MatchId}");
                     }
@@ -584,54 +574,63 @@ namespace TwitchBetBot.Services
                     LogToUI("❌ Победитель не определён!");
                     CurrentMatch.Winner = "Unknown";
                 }
-                else
-                {
-                    if (SessionStats != null && long.TryParse(CurrentMatch.MatchId, out long matchId))
-                    {
-                        var (isRanked, _) = await _openDotaService.GetMatchInfo(matchId);
 
-                        if (isRanked)
-                        {
-                            bool playerWon = CurrentMatch.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
-                            LogToUI($"🔍 Рейтинг: Winner={CurrentMatch.Winner}, PlayerTeam={_playerTeam}, Win={playerWon}");
+                var matchToEnd = CurrentMatch;
+                LogToUI($"🏁 ИГРА ЗАВЕРШЕНА! (закрываем ставку)");
+                LogToUI($"⏱️ Длительность: {matchToEnd.Duration:mm\\:ss}");
+                LogToUI($"🏆 Победитель: {matchToEnd.Winner}");
 
-                            if (playerWon)
-                            {
-                                SessionStats.AddRankedWin();
-                                LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR (теперь: {SessionStats.CurrentMmr})");
-                            }
-                            else
-                            {
-                                SessionStats.AddRankedLoss();
-                                LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR (теперь: {SessionStats.CurrentMmr})");
-                            }
-                        }
-                        else
-                        {
-                            bool playerWon = CurrentMatch.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
-                            LogToUI($"🔍 Нерейтинг: Winner={CurrentMatch.Winner}, PlayerTeam={_playerTeam}, Win={playerWon}");
+                OnGameEnded?.Invoke(matchToEnd);
 
-                            if (playerWon)
-                                SessionStats.AddUnrankedWin();
-                            else
-                                SessionStats.AddUnrankedLoss();
+                _ = UpdateStatsAfterGame(CurrentMatch);
 
-                            LogToUI($"📊 Нерейтинговая игра: {(playerWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ")}");
-                        }
-                    }
-                }
-
-                LogToUI($"🏁 ИГРА ЗАВЕРШЕНА!");
-                LogToUI($"⏱️ Длительность: {CurrentMatch.Duration:mm\\:ss}");
-                LogToUI($"🏆 Победитель: {CurrentMatch.Winner}");
-
-                OnGameEnded?.Invoke(CurrentMatch);
                 CurrentMatch = null;
-              
             }
             catch (Exception ex)
             {
                 LogToUI($"❌ Ошибка EndGame: {ex.Message}");
+            }
+        }
+
+        private async Task UpdateStatsAfterGame(Dota2Match match)
+        {
+            try
+            {
+                if (SessionStats == null || string.IsNullOrEmpty(match.MatchId)) return;
+
+                if (!long.TryParse(match.MatchId, out long matchId)) return;
+
+                var (isRanked, radiantWin) = await _openDotaService.GetMatchInfo(matchId);
+
+                if (isRanked)
+                {
+                    bool playerWon = match.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
+
+                    if (playerWon)
+                    {
+                        SessionStats.AddRankedWin();
+                        LogToUI($"📊 РЕЙТИНГОВАЯ ПОБЕДА! +25 MMR (теперь: {SessionStats.CurrentMmr})");
+                    }
+                    else
+                    {
+                        SessionStats.AddRankedLoss();
+                        LogToUI($"📊 РЕЙТИНГОВОЕ ПОРАЖЕНИЕ! -25 MMR (теперь: {SessionStats.CurrentMmr})");
+                    }
+                }
+                else
+                {
+                    bool playerWon = match.Winner.Equals(_playerTeam, StringComparison.OrdinalIgnoreCase);
+                    if (playerWon)
+                        SessionStats.AddUnrankedWin();
+                    else
+                        SessionStats.AddUnrankedLoss();
+
+                    LogToUI($"📊 Нерейтинговая игра: {(playerWon ? "ПОБЕДА" : "ПОРАЖЕНИЕ")}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogToUI($"❌ Ошибка обновления статистики: {ex.Message}");
             }
         }
 
