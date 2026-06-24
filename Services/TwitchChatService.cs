@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using TwitchBetBot.Models;
 using TwitchLib.Client;
 using TwitchLib.Client.Events;
@@ -67,7 +67,7 @@ namespace TwitchBetBot.Services
         {
             try
             {
-                string message = "Команды: !pts - MMR, !wl - Win/Lose, !stats - подробная статистика, !music - текущий трек, !help - помощь";
+                string message = "Команды: !mmr - MMR, !wl - Win/Lose, !stats - подробная статистика, !music - текущий трек, !help - помощь";
                 _client.SendMessage(_channelName, message);
                 Log($"🤖 Авто-сообщение отправлено");
             }
@@ -100,7 +100,7 @@ namespace TwitchBetBot.Services
         private void OnJoinedChannel(object sender, OnJoinedChannelArgs e)
         {
             Log($"✅ Бот зашёл в канал {e.Channel}");
-            _client.SendMessage(e.Channel, "🤖 Бот готов! Команды: !pts, !wl, !stats, !music, !help");
+            _client.SendMessage(e.Channel, "🤖 Бот готов! Команды: !mmr, !wl, !stats, !music, !help");
         }
 
         private void OnConnectionError(object sender, OnConnectionErrorArgs e)
@@ -128,7 +128,7 @@ namespace TwitchBetBot.Services
             {
                 HandleMusicCommand(username);
             }
-            else if (message == "!pts")
+            else if (message == "!mmr")
             {
                 HandlePtsCommand(username);
             }
@@ -144,7 +144,7 @@ namespace TwitchBetBot.Services
 
         private void HandleHelpCommand(string username)
         {
-            string response = $"@{username} Доступные команды: !pts - текущий MMR, !wl - Win/Lose, !music - текущий трек, !stats - подробная статистика";
+            string response = $"@{username} Доступные команды: !mmr - текущий MMR, !wl - Win/Lose, !music - текущий трек, !stats - подробная статистика";
             _client.SendMessage(_channelName, response);
             Log($"🤖 Ответ на !help: {response}");
         }
@@ -173,7 +173,7 @@ namespace TwitchBetBot.Services
             }
 
             _client.SendMessage(_channelName, response);
-            Log($"🤖 Ответ на !pts: {response}");
+            Log($"🤖 Ответ на !mmr: {response}");
         }
 
         private void HandleMusicCommand(string username)
