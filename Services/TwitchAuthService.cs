@@ -4,7 +4,6 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using TwitchBetBot.Models;
-
 namespace TwitchBetBot.Services
 {
     // Сервис для работы с авторизацией Twitch
@@ -12,14 +11,12 @@ namespace TwitchBetBot.Services
     public class TwitchAuthService
     {
         private readonly HttpClient _httpClient;
-
         public TwitchAuthService()
         {
             _httpClient = new HttpClient();
             // Все ответы от Twitch обычно в JSON
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         }
-
         // Проверяет, валиден ли токен доступа
         // Возвращает информацию о токене или null если токен невалидный
         public async Task<AuthValidation> ValidateToken(string accessToken)
@@ -30,10 +27,8 @@ namespace TwitchBetBot.Services
                 _httpClient.DefaultRequestHeaders.Remove("Authorization");
                 // Добавляем новый с переданным токеном
                 _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
-
                 // Twitch API для проверки токена
                 var response = await _httpClient.GetAsync("https://id.twitch.tv/oauth2/validate");
-
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
@@ -46,7 +41,6 @@ namespace TwitchBetBot.Services
             }
             return null;
         }
-
         // Получает ID канала по его имени
         // Нужно для создания ставок (требуется broadcaster_id)
         public async Task<string> GetBroadcasterId(string accessToken, string clientId, string channelName)
@@ -58,16 +52,13 @@ namespace TwitchBetBot.Services
                 _httpClient.DefaultRequestHeaders.Remove("Client-Id");
                 _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {accessToken}");
                 _httpClient.DefaultRequestHeaders.Add("Client-Id", clientId);
-
                 // Запрашиваем информацию о пользователе по логину
                 var response = await _httpClient.GetAsync(
                     $"https://api.twitch.tv/helix/users?login={channelName}");
-
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<UsersResponse>(json);
-
                     // Возвращаем ID первого найденного пользователя
                     if (result?.Data?.Length > 0)
                     {
@@ -77,7 +68,6 @@ namespace TwitchBetBot.Services
             }
             catch (Exception)
             {
-                
             }
             return null;
         }

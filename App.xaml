@@ -3,26 +3,12 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:TwitchBetBot.Converters"
              StartupUri="Views/MainWindow.xaml">
-
     <Application.Resources>
         <!-- Основные конвертеры -->
         <local:BoolToStringConverter x:Key="BoolToString" 
                                      TrueText="Подключено" 
                                      FalseText="Отключено"/>
-
-        <local:BoolToVisibilityConverter x:Key="BoolToVisibility" />
-
-        <local:NullToBoolConverter x:Key="NullToBool" />
-
-        <!-- Для видимости элементов -->
-        <local:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
-
         <local:NullToVisibilityConverter x:Key="NullToVisibilityConverter" />
-
-        <!-- Для изменения цвета -->
         <local:BoolToColorConverter x:Key="BoolToColorConverter" />
-
-        <!-- Для конвертации Enum в Boolean (для RadioButton) -->
-        <local:EnumToBooleanConverter x:Key="EnumToBooleanConverter"/>
     </Application.Resources>
 </Application>

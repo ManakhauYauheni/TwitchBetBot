@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-
 namespace TwitchBetBot.Models
 {
     // Класс для хранения информации о ставке (предсказании) в Twitch
@@ -32,7 +31,6 @@ namespace TwitchBetBot.Models
         // Сколько всего баллов поставили
         public int TotalPoints { get; set; }
     }
-
     // Вариант ответа в ставке (Radiant или Dire)
     public class PredictionOutcome
     {
@@ -49,7 +47,6 @@ namespace TwitchBetBot.Models
         // Коэффициент (рассчитывается автоматически Twitch)
         public decimal Odds { get; set; }
     }
-
     // Статусы ставки
     public enum PredictionStatus
     {

@@ -4,7 +4,6 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using TwitchBetBot.Models;
-
 namespace TwitchBetBot.Services
 {
     // Сервис для работы со ставками (предсказаниями) через Twitch API
@@ -14,15 +13,14 @@ namespace TwitchBetBot.Services
         private readonly HttpClient _httpClient;      // Клиент для HTTP запросов к Twitch
         private readonly AppConfig _config;           // Настройки (токен, ID канала)
         private Prediction _currentPrediction;        // Текущая активная ставка
-
         // Свойство для доступа к текущей ставке из других классов
         public Prediction CurrentPrediction => _currentPrediction;
-
+        // Сбрасывает внутреннее состояние текущей ставки (после завершения игры)
+        public void ClearCurrentPrediction() => _currentPrediction = null;
         // События, на которые подписывается MainViewModel чтобы знать об изменениях
         public event EventHandler<Prediction> OnPredictionCreated;  // Ставка создана
         public event EventHandler<Prediction> OnPredictionUpdated;  // Ставка обновлена (закрыта)
         public event EventHandler<Prediction> OnPredictionEnded;    // Ставка завершена/отменена
-
         // Конструктор - вызывается при создании сервиса
         public PredictionService(AppConfig config)
         {
@@ -33,10 +31,8 @@ namespace TwitchBetBot.Services
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {config.AccessToken}");
             _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
         }
-
         // Создание новой ставки
-        public async Task<Prediction> 
-            Async(string title, string[] outcomes, int windowSeconds = 300)
+        public async Task<Prediction> CreatePredictionAsync(string title, string[] outcomes, int windowSeconds = 300)
         {
             try
             {
@@ -52,21 +48,17 @@ namespace TwitchBetBot.Services
                     },
                     prediction_window = windowSeconds            // Сколько времени принимать
                 };
-
                 // Превращаем в JSON
                 var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-
                 // Отправляем POST запрос в Twitch
                 var response = await _httpClient.PostAsync(
                     "https://api.twitch.tv/helix/predictions", content);
-
                 if (response.IsSuccessStatusCode)
                 {
                     // Если успешно - парсим ответ
                     var responseJson = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<PredictionResponse>(responseJson);
-
                     if (result?.Data?.Length > 0)
                     {
                         // Превращаем ответ Twitch в нашу модель Prediction
@@ -77,18 +69,16 @@ namespace TwitchBetBot.Services
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                
+                Console.WriteLine("[PredictionService] Ошибка: " + ex.Message);
             }
             return null;
         }
-
         // Закрытие приема ставок (LOCKED)
         public async Task<bool> LockPredictionAsync()
         {
             if (_currentPrediction == null) return false;
-
             try
             {
                 var request = new
@@ -97,19 +87,15 @@ namespace TwitchBetBot.Services
                     id = _currentPrediction.Id,
                     status = "LOCKED"      // Меняем статус на LOCKED
                 };
-
                 var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-
                 // Twitch API использует PATCH для обновления
                 var response = await _httpClient.PatchAsync(
                     "https://api.twitch.tv/helix/predictions", content);
-
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<PredictionResponse>(responseJson);
-
                     if (result?.Data?.Length > 0)
                     {
                         _currentPrediction = MapToPrediction(result.Data[0]);
@@ -118,18 +104,16 @@ namespace TwitchBetBot.Services
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Игнорируем ошибки
+                Console.WriteLine("[PredictionService] Ошибка: " + ex.Message);
             }
             return false;
         }
-
         // Завершение ставки с победителем (RESOLVED)
         public async Task<bool> EndPredictionAsync(string winningOutcomeId)
         {
             if (_currentPrediction == null) return false;
-
             try
             {
                 var request = new
@@ -139,18 +123,14 @@ namespace TwitchBetBot.Services
                     status = "RESOLVED",              // Статус "завершена"
                     winning_outcome_id = winningOutcomeId  // ID победившего варианта
                 };
-
                 var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-
                 var response = await _httpClient.PatchAsync(
                     "https://api.twitch.tv/helix/predictions", content);
-
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<PredictionResponse>(responseJson);
-
                     if (result?.Data?.Length > 0)
                     {
                         _currentPrediction = MapToPrediction(result.Data[0]);
@@ -159,18 +139,16 @@ namespace TwitchBetBot.Services
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-               
+                Console.WriteLine("[PredictionService] Ошибка: " + ex.Message);
             }
             return false;
         }
-
         // Отмена ставки (возврат баллов)
         public async Task<bool> CancelPredictionAsync()
         {
             if (_currentPrediction == null) return false;
-
             try
             {
                 var request = new
@@ -179,18 +157,14 @@ namespace TwitchBetBot.Services
                     id = _currentPrediction.Id,
                     status = "CANCELED"      // Статус "отменена"
                 };
-
                 var json = JsonConvert.SerializeObject(request);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-
                 var response = await _httpClient.PatchAsync(
                     "https://api.twitch.tv/helix/predictions", content);
-
                 if (response.IsSuccessStatusCode)
                 {
                     var responseJson = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<PredictionResponse>(responseJson);
-
                     if (result?.Data?.Length > 0)
                     {
                         _currentPrediction = MapToPrediction(result.Data[0]);
@@ -199,13 +173,12 @@ namespace TwitchBetBot.Services
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-               
+                Console.WriteLine("[PredictionService] Ошибка: " + ex.Message);
             }
             return false;
         }
-
         // Принудительное обновление данных (сброс кэша и запрос к API)
         public async Task ForceRefresh()
         {
@@ -213,18 +186,14 @@ namespace TwitchBetBot.Services
             {
                 // Очищаем кэш
                 _currentPrediction = null;
-
                 // Запрашиваем свежие данные с Twitch
                 var response = await _httpClient.GetAsync(
                     $"https://api.twitch.tv/helix/predictions?broadcaster_id={_config.BroadcasterId}");
-
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<PredictionResponse>(json);
-
-                    LogToConsole($"🔄 ForceRefresh: получено {result?.Data?.Length ?? 0} ставок");
-
+                    LogToConsole($"ForceRefresh: получено {result?.Data?.Length ?? 0} ставок");
                     if (result?.Data?.Length > 0)
                     {
                         foreach (var data in result.Data)
@@ -236,16 +205,14 @@ namespace TwitchBetBot.Services
             }
             catch (Exception ex)
             {
-                LogToConsole($"❌ ForceRefresh ошибка: {ex.Message}");
+                LogToConsole($"ForceRefresh ошибка: {ex.Message}");
             }
         }
-
         // Логирование в консоль
         private void LogToConsole(string message)
         {
             Console.WriteLine($"[PredictionService] {DateTime.Now:HH:mm:ss} {message}");
         }
-
         // Получение текущей активной ставки
         public async Task<Prediction> GetCurrentPredictionAsync()
         {
@@ -253,16 +220,13 @@ namespace TwitchBetBot.Services
             {
                 var response = await _httpClient.GetAsync(
                     $"https://api.twitch.tv/helix/predictions?broadcaster_id={_config.BroadcasterId}");
-
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
                     var result = JsonConvert.DeserializeObject<PredictionResponse>(json);
-
                     if (result?.Data?.Length > 0)
                     {
                         var prediction = MapToPrediction(result.Data[0]);
-
                         // Только активные или заблокированные ставки
                         if (prediction.Status == PredictionStatus.ACTIVE ||
                             prediction.Status == PredictionStatus.LOCKED)
@@ -279,13 +243,12 @@ namespace TwitchBetBot.Services
                     }
                 }
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // Игнорируем ошибки
+                Console.WriteLine("[PredictionService] Ошибка: " + ex.Message);
             }
             return null;
         }
-
         // Превращает данные из Twitch API в нашу внутреннюю модель Prediction
         private Prediction MapToPrediction(TwitchPredictionData apiData)
         {
@@ -298,7 +261,6 @@ namespace TwitchBetBot.Services
                 CreatedAt = apiData.CreatedAt,
                 PredictionWindowSeconds = apiData.PredictionWindowSeconds
             };
-
             foreach (var outcome in apiData.Outcomes)
             {
                 prediction.Outcomes.Add(new PredictionOutcome
@@ -310,7 +272,6 @@ namespace TwitchBetBot.Services
                     ChannelPoints = outcome.ChannelPoints
                 });
             }
-
             return prediction;
         }
     }

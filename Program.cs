@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Windows;
-
 namespace TwitchBetBot
 {
     // Точка входа в программу

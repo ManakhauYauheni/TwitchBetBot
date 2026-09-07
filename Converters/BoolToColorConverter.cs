@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
-
 namespace TwitchBetBot.Converters
 {
     // Конвертер для смены цвета в зависимости от true/false
@@ -27,7 +26,6 @@ namespace TwitchBetBot.Converters
             // Если что-то не так - серый цвет по умолчанию
             return new SolidColorBrush(Colors.Gray);
         }
-
         // Обратная конвертация не нужна
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {

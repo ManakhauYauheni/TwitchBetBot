@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Globalization;
 using System.Windows.Data;
-
 namespace TwitchBetBot.Converters
 {
     // Конвертер для замены true/false на понятные человеку слова
@@ -12,14 +11,12 @@ namespace TwitchBetBot.Converters
         public string TrueText { get; set; } = "Да";
         // Текст для значения false 
         public string FalseText { get; set; } = "Нет";
-
         // Превращает true/false в соответствующий текст
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
             // Если value - это bool и он true - возвращаем TrueText, иначе FalseText
             return value is bool boolValue && boolValue ? TrueText : FalseText;
         }
-
         // Обратное преобразование не нужно
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {

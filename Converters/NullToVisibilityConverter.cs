@@ -2,7 +2,6 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
-
 namespace TwitchBetBot.Converters
 {
     // Конвертер для показа/скрытия элементов на основе наличия данных
@@ -11,7 +10,6 @@ namespace TwitchBetBot.Converters
     {
         // Если true - инвертирует: показывать когда null, прятать когда не null
         public bool Invert { get; set; }
-
         // Проверяем наличие данных и возвращаем Visible/Collapsed
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
@@ -22,7 +20,6 @@ namespace TwitchBetBot.Converters
             // true = показываем, false = прячем
             return shouldShow ? Visibility.Visible : Visibility.Collapsed;
         }
-
         // Обратное преобразование не нужно
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
         {

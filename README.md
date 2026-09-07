@@ -82,6 +82,64 @@ https://id.twitch.tv/oauth2/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=http
 }
 </pre><br>
 
+<h2><b>Настройка DonationAlerts (заказ музыки за донат)</b></h2>
+
+<h3><b>Регистрация приложения</b></h3>
+
+1. Перейдите на https://www.donationalerts.com/application/clients<br>
+2. Нажмите "Создать приложение"<br>
+3. Заполните форму:<br>
+   • Название: TwitchBetBot<br>
+   • Redirect URI: <code>http://localhost:3000</code> (точно такой же, как в настройках приложения на вкладке «DonationAlerts / Музыка»)<br>
+4. Скопируйте <b>Client ID</b> и <b>Client Secret</b><br>
+
+Используемые scope: <code>oauth-user-show oauth-donation-subscribe oauth-donation-index</code> — запрашиваются приложением автоматически.
+
+<h3><b>Авторизация в приложении</b></h3>
+
+1. Откройте вкладку <b>💰 DonationAlerts / Музыка</b><br>
+2. Вставьте Client ID, Client Secret и Redirect URI<br>
+3. Нажмите <b>«🔑 Авторизоваться в DonationAlerts»</b> — откроется окно входа, после подтверждения токены сохранятся автоматически<br>
+4. Нажмите <b>«▶ Подключить»</b> — индикатор станет зелёным, бот слушает донаты в реальном времени<br>
+5. Включите чекбоксы «Обрабатывать донаты» и, при желании, «Подключаться к DonationAlerts при запуске»<br>
+6. Сохраните настройки<br>
+
+Access token, refresh token и client secret шифруются Windows DPAPI (как и токен Twitch) и хранятся в <code>config.json</code>. Обновление access token по refresh token происходит автоматически.
+
+<h3><b>Установка yt-dlp</b></h3>
+
+Поиск трека и определение его длительности выполняются через <a href="https://github.com/yt-dlp/yt-dlp/releases">yt-dlp</a> (без скачивания видео).<br>
+
+1. Скачайте <code>yt-dlp.exe</code><br>
+2. Положите его рядом с <code>TwitchBetBot.exe</code> либо в любую папку из PATH<br>
+3. Либо укажите полный путь в поле «Путь к yt-dlp.exe» на вкладке DonationAlerts<br>
+
+<h3><b>Как заказывают музыку</b></h3>
+
+Зритель отправляет донат от <b>100 ₽</b> (сумма настраивается в поле «Минимальная сумма») с сообщением:<br>
+<pre>!play Rammstein - Sonne</pre>
+Можно прислать и прямую ссылку:<br>
+<pre>!play https://www.youtube.com/watch?v=...</pre>
+
+Что происходит дальше:<br>
+• yt-dlp находит трек и его длительность<br>
+• трек попадает в очередь и открывается в браузере по умолчанию у стримера<br>
+• по окончании трека (по длительности + небольшой запас) автоматически включается следующий, если включён «Автоматически включать следующий трек»<br>
+
+Донаты не в рублях автоматически конвертируются в рубли по текущему курсу.
+
+<h3><b>Команды чата</b></h3>
+
+<table>
+<tr><td><code>!music</code></td><td>показать, что играет сейчас</td></tr>
+<tr><td><code>!queue</code> / <code>!q</code></td><td>показать очередь треков</td></tr>
+<tr><td><code>!skip</code></td><td>пропустить трек (только стример и модераторы)</td></tr>
+</table>
+
+<blockquote>
+⚠️ <code>config.json</code> зашифрован средствами Windows DPAPI и привязан к учётной записи Windows — при переносе на другой компьютер или другого пользователя токены придётся ввести заново.
+</blockquote>
+
 <h2><b>Использование</b></h2>
 <h3>Первый запуск</h3>
 1.Вставьте токен<br>

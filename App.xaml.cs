@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 using System.Windows;
-
 namespace TwitchBetBot
 {
     public partial class App : Application
@@ -11,13 +10,10 @@ namespace TwitchBetBot
         protected override void OnExit(ExitEventArgs e)
         {
             base.OnExit(e);
-
             // Небольшая задержка перед очисткой
             Thread.Sleep(500);
-
             CleanEBWebView();
         }
-
         private void CleanEBWebView()
         {
             try
@@ -26,24 +22,19 @@ namespace TwitchBetBot
                     AppDomain.CurrentDomain.BaseDirectory,
                     "TwitchBetBot.exe.WebView2",
                     "EBWebView");
-
                 if (!Directory.Exists(ebWebViewPath))
                     return;
-
                 // ШАГ 1: Удаляем всё в EBWebView, кроме Default и Local State
                 foreach (var item in Directory.GetFileSystemEntries(ebWebViewPath))
                 {
                     string name = Path.GetFileName(item);
-
                     if (name.Equals("Default", StringComparison.OrdinalIgnoreCase) ||
                         name.Equals("Local State", StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
                     }
-
                     DeleteWithRetry(item);
                 }
-
                 // ШАГ 2: Очищаем папку Default, но сохраняем Network
                 string defaultPath = Path.Combine(ebWebViewPath, "Default");
                 if (Directory.Exists(defaultPath))
@@ -51,12 +42,10 @@ namespace TwitchBetBot
                     foreach (var item in Directory.GetFileSystemEntries(defaultPath))
                     {
                         string name = Path.GetFileName(item);
-
                         if (name.Equals("Network", StringComparison.OrdinalIgnoreCase))
                         {
                             continue;
                         }
-
                         DeleteWithRetry(item);
                     }
                 }
@@ -66,7 +55,6 @@ namespace TwitchBetBot
                 Debug.WriteLine($"Ошибка очистки EBWebView: {ex.Message}");
             }
         }
-
         private void DeleteWithRetry(string path, int maxRetries = 5, int delayMs = 300)
         {
             for (int i = 0; i < maxRetries; i++)
